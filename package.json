@@ -13,7 +13,8 @@
     "test:e2e": "playwright test",
     "dist": "electron-vite build && electron-builder --win",
     "dist:dir": "electron-vite build && electron-builder --win --dir",
-    "dist:linux": "bash scripts/build-linux.sh"
+    "dist:linux": "bash scripts/build-linux.sh",
+    "dist:mac": "electron-builder --mac dmg zip --publish never"
   },
   "dependencies": {
     "@tiptap/core": "^3.26.0",
@@ -92,6 +93,29 @@
           "Keywords": "writing;word processor;editor;docx;"
         }
       }
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "category": "public.app-category.productivity",
+      "artifactName": "${productName}-${version}-${arch}.${ext}",
+      "darkModeSupport": true,
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false
     }
   },
   "appId": "com.crperdue.unbound",

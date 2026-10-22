@@ -132,3 +132,63 @@ jobs:
             dist/*.deb
             dist/*.AppImage
           generate_release_notes: true
+
+  macos:
+    # A .dmg can only be produced on macOS — electron-builder needs hdiutil and
+    # the platform's own toolchain. Both arches are built here: arm64 for Apple
+    # Silicon, x64 for Intel.
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Test
+        run: npm test
+
+      - name: Guard — no print, no PDF
+        shell: bash
+        run: |
+          set -e
+          hits=$(grep -rniE "printToPDF|printHtml|app:print|createPdf|wrapForPrint|PRINT_CSS|doPrint|formats/pdf|@media[[:space:]]+print" src/ e2e/ test/ || true)
+          if [ -n "$hits" ]; then
+            echo "::error::Print/PDF code found — Unbound must have neither."
+            echo "$hits"
+            exit 1
+          fi
+          echo "Guard clean: no print or PDF code paths."
+
+      - name: Build renderer
+        run: npm run build
+
+      # No signing identity is configured, so electron-builder produces an
+      # unsigned app. CSC_IDENTITY_AUTO_DISCOVERY=false stops it from trying to
+      # find a keychain cert and failing the run.
+      - name: Package installer
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: npx electron-builder --mac dmg zip --publish never
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: unbound-macos
+          path: |
+            dist/*.dmg
+            dist/*.zip
+          if-no-files-found: error
+
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.dmg
+            dist/*.zip
+          generate_release_notes: true

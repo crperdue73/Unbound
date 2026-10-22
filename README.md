@@ -11,6 +11,37 @@ fight. You start typing and the document keeps going — one continuous column t
 scrolls as far as you need it to. The scrollbar is the only measure of how much
 you've written, and it's honest.
 
+## Download
+
+Installers are built by CI on each platform's own runner and attached to the
+[latest release](https://github.com/crperdue73/Unbound/releases/latest).
+
+| Platform | File | Notes |
+| --- | --- | --- |
+| Windows | `Unbound-Setup-1.0.0.exe` | Installer, or the `-portable.exe` to run without installing |
+| Debian / Ubuntu | `Unbound-1.0.0-amd64.deb` | `sudo apt install ./Unbound-1.0.0-amd64.deb` |
+| Any Linux | `Unbound-1.0.0-x86_64.AppImage` | `chmod +x` and run. Needs `libfuse2` on newer distros |
+| macOS (Apple Silicon) | `Unbound-1.0.0-arm64.dmg` | See the first-launch note below |
+| macOS (Intel) | `Unbound-1.0.0-x64.dmg` | See the first-launch note below |
+
+**None of these builds are code-signed.** Signing is a paid certificate on both
+Windows and macOS, and Unbound doesn't have one yet.
+
+- **Windows:** SmartScreen shows "Windows protected your PC". More info →
+  Run anyway.
+- **macOS:** Gatekeeper will say the app "is damaged and can't be opened" or is
+  from an unidentified developer. That message is wrong — the app is intact, it
+  just isn't notarized. To open it anyway, either right-click the app and choose
+  **Open** (once, then it's remembered), or clear the quarantine flag:
+
+  ```sh
+  xattr -dr com.apple.quarantine /Applications/Unbound.app
+  ```
+
+  If macOS reports the app is damaged rather than unidentified, the `xattr` line
+  above is the fix — Gatekeeper reports an un-notarized app that way when it was
+  downloaded by a browser.
+
 Unbound is a fork of [FreeWrite](https://github.com/Teoretarded/FreeWrite), rebuilt
 around a single idea: **a document is a document, not a stack of paper.**
 
