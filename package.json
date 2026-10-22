@@ -12,7 +12,8 @@
     "test": "vitest run",
     "test:e2e": "playwright test",
     "dist": "electron-vite build && electron-builder --win",
-    "dist:dir": "electron-vite build && electron-builder --win --dir"
+    "dist:dir": "electron-vite build && electron-builder --win --dir",
+    "dist:linux": "bash scripts/build-linux.sh"
   },
   "dependencies": {
     "@tiptap/core": "^3.26.0",
@@ -71,7 +72,27 @@
     "portable": {
       "artifactName": "${productName}-${version}-portable.exe"
     },
-    "artifactName": "${productName}-Setup-${version}.${ext}"
+    "artifactName": "${productName}-Setup-${version}.${ext}",
+    "linux": {
+      "target": [
+        "deb",
+        "AppImage"
+      ],
+      "category": "Office",
+      "synopsis": "A word processor that never breaks into pages",
+      "description": "Unbound is a word processor with no pages: no print option, no PDF, no page breaks. One continuous column that scrolls as far as you need. Word (.docx) is the only format.",
+      "maintainer": "Robbie Perdue <crperdue73@users.noreply.github.com>",
+      "executableName": "unbound",
+      "artifactName": "${productName}-${version}-${arch}.${ext}",
+      "desktop": {
+        "entry": {
+          "Name": "Unbound",
+          "Comment": "A word processor that never breaks into pages",
+          "Categories": "Office;WordProcessor;",
+          "Keywords": "writing;word processor;editor;docx;"
+        }
+      }
+    }
   },
   "appId": "com.crperdue.unbound",
   "productName": "Unbound",
