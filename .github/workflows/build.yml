@@ -1,0 +1,78 @@
+name: build
+
+# Builds the Unbound installer on GitHub's own runners and publishes it to a
+# Release. This exists because there is no Windows build toolchain on the dev
+# host, and because the installer you download should be produced by the same
+# commit you can read here.
+#
+# Triggers: manually (Actions > build > Run workflow), or by pushing a v* tag.
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # Unit tests gate the build. If pagination, print or PDF ever come back,
+      # test/formats.test.js fails and no installer is produced.
+      - name: Install
+        run: npm ci
+
+      - name: Test
+        run: npm test
+
+      # Fail the build if any print or PDF path is reintroduced. Matches code
+      # symbols that would indicate a real feature, not prose in the README.
+      - name: Guard — no print, no PDF
+        shell: bash
+        run: |
+          set -e
+          hits=$(grep -rniE "printToPDF|printHtml|app:print|createPdf|wrapForPrint|PRINT_CSS|doPrint|formats/pdf|@media[[:space:]]+print" src/ e2e/ test/ || true)
+          if [ -n "$hits" ]; then
+            echo "::error::Print/PDF code found — Unbound must have neither."
+            echo "$hits"
+            exit 1
+          fi
+          echo "Guard clean: no print or PDF code paths."
+
+      - name: Build renderer
+        run: npm run build
+
+      - name: Package installer
+        run: npx electron-builder --win --publish never
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: unbound-windows
+          path: |
+            dist/*.exe
+            dist/*.blockmap
+            dist/latest.yml
+          if-no-files-found: error
+
+      # On a tag push, attach the built files to a Release so the installer has
+      # a stable public URL.
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.exe
+            dist/*.blockmap
+            dist/latest.yml
+          generate_release_notes: true

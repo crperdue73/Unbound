@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'"
+    />
+    <title>Unbound</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div id="app">
+      <!-- Top toolbar -->
+      <div id="toolbar" class="toolbar" role="toolbar" aria-label="Formatting toolbar"></div>
+
+      <!-- Find & replace bar (mounted by find.js) -->
+      <div id="find-host" class="find-host"></div>
+
+      <!-- Recovery banner (shown on startup if an autosaved draft exists) -->
+      <div id="recovery-banner" class="recovery-banner" role="status"></div>
+
+      <!-- Body row: outline panel + the continuously scrolling document column -->
+      <div class="body-row" id="body-row">
+        <aside id="outline-panel" class="outline-panel" aria-label="Document outline"></aside>
+        <main class="editor-area" id="editor-area">
+          <!-- The document column. Zoom is applied to .page-wrap; the editor is
+               mounted on it. No page sheets, no page boundaries — the column
+               scrolls continuously and the editor-area scrolls with it. -->
+          <div class="page-wrap" id="page" spellcheck="true"></div>
+        </main>
+      </div>
+
+      <!-- Bottom status bar -->
+      <footer id="statusbar" class="statusbar"></footer>
+    </div>
+
+    <!-- Transient toast notifications -->
+    <div id="toast-host" class="toast-host" aria-live="polite"></div>
+
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>

@@ -1,0 +1,1228 @@
+/* ===========================================================================
+   Unbound — renderer styles
+   A clean, modern, Word-like word processor look: light-grey app chrome, a
+   grouped toolbar, a white "page" centered on a grey canvas, readable
+   typography and clear active-button states.
+   ===========================================================================*/
+
+:root {
+  --chrome-bg: #f3f3f4;
+  --chrome-bg-2: #ebebed;
+  --canvas-bg: #d7d8db;
+  --border: #d6d6da;
+  --border-strong: #c2c2c8;
+  --text: #1f2329;
+  --text-muted: #6b6f76;
+  --accent: #2b6cb0;
+  --accent-soft: #e3eefb;
+  --active-bg: #d3e3f7;
+  --active-border: #9cc1ee;
+  --hover-bg: #e6e6e9;
+  --page-shadow: rgba(0, 0, 0, 0.18);
+  --toolbar-h: auto;
+  --page-width: 8.5in;
+  --page-pad: 1in;
+  --radius: 6px;
+  --font-ui: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-body: "Calibri", "Carlito", "Segoe UI", system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+}
+
+body {
+  font-family: var(--font-ui);
+  color: var(--text);
+  background: var(--canvas-bg);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+#app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* ---------------------------------------------------------------------------
+   Toolbar
+   ---------------------------------------------------------------------------*/
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 10px;
+  background: linear-gradient(var(--chrome-bg), var(--chrome-bg-2));
+  border-bottom: 1px solid var(--border-strong);
+  user-select: none;
+  flex: 0 0 auto;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.6) inset;
+}
+
+.tb-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+}
+
+.tb-sep {
+  width: 1px;
+  height: 22px;
+  margin: 0 6px;
+  background: var(--border-strong);
+  display: inline-block;
+}
+
+.tb-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 30px;
+  height: 30px;
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.tb-btn:hover {
+  background: var(--hover-bg);
+  border-color: var(--border);
+}
+
+.tb-btn:active {
+  background: var(--active-bg);
+}
+
+.tb-btn.is-active {
+  background: var(--active-bg);
+  border-color: var(--active-border);
+  color: var(--accent);
+}
+
+.tb-btn.is-disabled,
+.tb-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+  pointer-events: none;
+}
+
+.tb-btn svg {
+  display: block;
+  pointer-events: none;
+}
+
+/* Selects (style / font / size) */
+.tb-select {
+  height: 30px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: #fff;
+  color: var(--text);
+  padding: 0 26px 0 8px;
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'><path d='M1 3l4 4 4-4' fill='none' stroke='%236b6f76' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+
+.tb-select:hover {
+  border-color: var(--active-border);
+}
+
+.tb-select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+.tb-style-select {
+  min-width: 124px;
+}
+.tb-font-select {
+  min-width: 138px;
+}
+.tb-size-select {
+  min-width: 72px;
+}
+
+/* Color controls */
+.tb-color {
+  position: relative;
+  display: inline-flex;
+}
+
+.tb-color-trigger {
+  flex-direction: column;
+  gap: 1px;
+  min-width: 34px;
+  padding: 2px 5px;
+}
+
+.tb-color-trigger .tb-color-label {
+  font-weight: 700;
+  font-size: 13px;
+  line-height: 1;
+}
+
+.tb-color-trigger .tb-color-bar {
+  display: block;
+  width: 18px;
+  height: 4px;
+  border-radius: 1px;
+  background: #e60000;
+}
+
+.tb-color-highlight .tb-color-bar {
+  background: #fff2a8;
+}
+
+.tb-caret {
+  font-size: 9px;
+  color: var(--text-muted);
+  margin-left: 2px;
+}
+
+.tb-lh-trigger {
+  gap: 2px;
+}
+
+.tb-popup {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 50;
+  display: none;
+  background: #fff;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16);
+  padding: 8px;
+}
+
+.tb-popup.open {
+  display: block;
+}
+
+.tb-swatch-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 20px);
+  gap: 4px;
+}
+
+.tb-swatch {
+  width: 20px;
+  height: 20px;
+  border: 1px solid rgba(0, 0, 0, 0.18);
+  border-radius: 4px;
+  cursor: pointer;
+  padding: 0;
+}
+
+.tb-swatch:hover {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.tb-color-custom {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.tb-color-input {
+  width: 28px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.tb-color-clear {
+  flex: 1;
+  height: 26px;
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  background: var(--chrome-bg);
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text);
+}
+
+.tb-color-clear:hover {
+  background: var(--hover-bg);
+}
+
+/* Line-spacing menu */
+.tb-lh-popup {
+  min-width: 130px;
+  padding: 4px;
+}
+
+.tb-menu-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 7px 10px;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.tb-menu-item:hover {
+  background: var(--accent-soft);
+}
+
+.tb-menu-clear {
+  margin-top: 4px;
+  border-top: 1px solid var(--border);
+  border-radius: 0 0 4px 4px;
+  color: var(--text-muted);
+}
+
+/* ---------------------------------------------------------------------------
+   Body row: outline panel + editor area
+   ---------------------------------------------------------------------------*/
+.body-row {
+  flex: 1 1 auto;
+  display: flex;
+  min-height: 0; /* allow children to scroll inside flex */
+  overflow: hidden;
+}
+
+/* ---------------------------------------------------------------------------
+   Outline / navigator side panel
+   ---------------------------------------------------------------------------*/
+.outline-panel {
+  flex: 0 0 0;
+  width: 0;
+  overflow: hidden;
+  background: var(--chrome-bg);
+  border-right: 1px solid var(--border-strong);
+  display: flex;
+  flex-direction: column;
+  transition: width 0.18s ease;
+}
+
+.outline-panel.show {
+  flex: 0 0 240px;
+  width: 240px;
+}
+
+.outline-header {
+  flex: 0 0 auto;
+  padding: 10px 14px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+}
+
+.outline-list {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 6px 6px 12px;
+}
+
+.outline-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  border-radius: 4px;
+  padding: 5px 8px;
+  font-size: 13px;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.outline-item:hover {
+  background: var(--hover-bg);
+}
+
+.outline-h1 {
+  font-weight: 600;
+}
+.outline-h2 {
+  padding-left: 20px;
+  color: var(--text);
+}
+.outline-h3 {
+  padding-left: 32px;
+  color: var(--text-muted);
+}
+
+.outline-empty {
+  display: none;
+  padding: 12px 14px;
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.outline-empty.show {
+  display: block;
+}
+
+/* ---------------------------------------------------------------------------
+   Editor area + page
+   ---------------------------------------------------------------------------*/
+.editor-area {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overflow-x: auto;
+  padding: 32px 24px 64px;
+  background: var(--canvas-bg);
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+/* ---------------------------------------------------------------------------
+   Continuous document column
+   Unbound never paginates. There are no page sheets, no desk gaps and no
+   page-break spacers: one column of text that scrolls forever. The column keeps
+   a reading-measure width (--ub-measure) so long-form text stays comfortable on
+   wide displays, but it is a column, not a sheet — it has no fixed height and no
+   page boundaries anywhere in the layout.
+   ---------------------------------------------------------------------------*/
+.page-wrap {
+  position: relative;
+  width: min(var(--ub-measure, 760px), 100%);
+  margin: 0 auto;
+  /* Canvas color — Settings sets --ub-canvas-color. Upstream this was the paper
+     sheet fill; with no sheets it is the writing surface itself. */
+  background: var(--ub-canvas-color, transparent);
+  border-radius: 4px;
+  color: var(--ub-text-color, #1a1a1a);
+  font-family: var(--font-body);
+  font-size: 11pt;
+  line-height: 1.5;
+  outline: none;
+}
+
+/* Kept as an empty hook: index.html no longer contains a .page-sheets layer,
+   and nothing draws into it. Guarded so an old cached DOM can't show sheets. */
+.page-sheets {
+  display: none !important;
+}
+
+/* TipTap/ProseMirror surface. The column is the document; padding here is
+   breathing room for the text, not a page margin. min-height is deliberately
+   absent — the surface grows with the text and the editor area scrolls. */
+.page-wrap .ProseMirror {
+  position: relative;
+  background: transparent;
+  /* Default text color — user-configurable via Settings (settings.js writes
+     --ub-text-color on <html>). This is the FALLBACK for typed text and any
+     pasted text WITHOUT an explicit color mark; explicit TextStyle color marks
+     still win. Keeping the caret visible on custom page colors below. */
+  color: var(--ub-text-color, #1a1a1a);
+  caret-color: var(--accent);
+  padding: 8px 0 240px;
+  outline: none;
+}
+
+.page-wrap .ProseMirror > * + * {
+  margin-top: 0;
+}
+
+.page-wrap p {
+  margin: 0 0 10pt;
+}
+
+.page-wrap h1 {
+  font-size: 22pt;
+  font-weight: 700;
+  margin: 14pt 0 8pt;
+  line-height: 1.2;
+}
+
+.page-wrap h2 {
+  font-size: 17pt;
+  font-weight: 700;
+  margin: 12pt 0 6pt;
+  line-height: 1.25;
+}
+
+.page-wrap h3 {
+  font-size: 14pt;
+  font-weight: 700;
+  margin: 10pt 0 5pt;
+  line-height: 1.3;
+}
+
+.page-wrap ul,
+.page-wrap ol {
+  margin: 0 0 10pt;
+  padding-left: 28px;
+}
+
+.page-wrap li {
+  margin: 2pt 0;
+}
+
+.page-wrap li > p {
+  margin: 0;
+}
+
+.page-wrap blockquote {
+  margin: 10pt 0;
+  padding-left: 14px;
+  border-left: 3px solid var(--border-strong);
+  color: var(--text-muted);
+}
+
+.page-wrap a {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.page-wrap code {
+  font-family: "Consolas", "Courier New", monospace;
+  background: #f1f1f3;
+  border-radius: 3px;
+  padding: 1px 4px;
+  font-size: 0.92em;
+}
+
+.page-wrap pre {
+  background: #1f2329;
+  color: #f5f5f5;
+  border-radius: 6px;
+  padding: 12px 14px;
+  overflow-x: auto;
+  margin: 10pt 0;
+}
+
+.page-wrap pre code {
+  background: transparent;
+  color: inherit;
+  padding: 0;
+}
+
+.page-wrap hr {
+  border: none;
+  border-top: 1px solid var(--border-strong);
+  margin: 14pt 0;
+}
+
+/* Placeholder-ish look when empty (best effort without the Placeholder ext) */
+.page-wrap .ProseMirror:focus {
+  outline: none;
+}
+
+/* Selected text */
+.page-wrap ::selection {
+  background: #b4d2f7;
+}
+
+/* ---------------------------------------------------------------------------
+   Status bar
+   ---------------------------------------------------------------------------*/
+.statusbar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 28px;
+  padding: 0 14px;
+  background: linear-gradient(var(--chrome-bg-2), var(--chrome-bg));
+  border-top: 1px solid var(--border-strong);
+  font-size: 12px;
+  color: var(--text-muted);
+  user-select: none;
+}
+
+.sb-left,
+.sb-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.sb-item {
+  white-space: nowrap;
+}
+
+.sb-saved {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sb-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #2faa5b;
+  transition: background 0.15s ease;
+}
+
+.sb-saved.is-unsaved .sb-dot {
+  background: #e0a400;
+}
+
+.sb-saved.is-unsaved .sb-saved-text {
+  color: #a07600;
+}
+
+/* ---------------------------------------------------------------------------
+   Toasts
+   ---------------------------------------------------------------------------*/
+.toast-host {
+  position: fixed;
+  right: 18px;
+  bottom: 42px;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.toast {
+  pointer-events: auto;
+  min-width: 220px;
+  max-width: 360px;
+  padding: 11px 14px;
+  border-radius: 8px;
+  color: #fff;
+  font-size: 13px;
+  line-height: 1.35;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
+  opacity: 0;
+  transform: translateY(10px);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  cursor: pointer;
+}
+
+.toast.show {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.toast-error {
+  background: #c0392b;
+}
+
+.toast-info {
+  background: #2b6cb0;
+}
+
+.toast-success {
+  background: #2f855a;
+}
+
+/* ---------------------------------------------------------------------------
+   Settings panel (modal overlay + centered card)
+   Live-previews default text color, page color, and the smart-paste toggle.
+   Works in both light and dark mode (uses the same chrome CSS variables).
+   ---------------------------------------------------------------------------*/
+.fw-settings-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.42);
+  padding: 24px;
+}
+
+.fw-settings-overlay.open {
+  display: flex;
+}
+
+.fw-settings-card {
+  width: 100%;
+  max-width: 440px;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  background: var(--chrome-bg);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.35);
+}
+
+.fw-settings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.fw-settings-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.fw-settings-x {
+  width: 28px;
+  height: 28px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.fw-settings-x:hover {
+  background: var(--hover-bg);
+  border-color: var(--border);
+  color: var(--text);
+}
+
+.fw-settings-body {
+  padding: 8px 20px 4px;
+}
+
+.fw-set-row {
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.fw-set-row:last-child {
+  border-bottom: none;
+}
+
+.fw-set-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.fw-set-hint {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+
+.fw-set-colors {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.fw-set-swatch {
+  width: 26px;
+  height: 26px;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  border-radius: 6px;
+  cursor: pointer;
+  padding: 0;
+}
+
+.fw-set-swatch:hover {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.fw-set-swatch.is-selected {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+.fw-set-picker {
+  width: 34px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.fw-set-hex {
+  font-size: 12px;
+  font-family: "Consolas", "Courier New", monospace;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.fw-set-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.fw-set-checkbox {
+  margin-top: 2px;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.fw-set-toggle-text {
+  display: block;
+}
+
+.fw-settings-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 14px 20px 18px;
+  border-top: 1px solid var(--border);
+}
+
+.fw-set-btn {
+  height: 34px;
+  padding: 0 16px;
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  background: #fff;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 13px;
+  font-family: inherit;
+}
+
+.fw-set-btn:hover {
+  background: var(--hover-bg);
+}
+
+.fw-set-done {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+
+.fw-set-done:hover {
+  filter: brightness(1.05);
+  background: var(--accent);
+}
+
+/* ---------------------------------------------------------------------------
+   Dropdown menus (Table, etc.)
+   ---------------------------------------------------------------------------*/
+.tb-dropdown-trigger {
+  gap: 2px;
+}
+
+.tb-dropdown-popup {
+  min-width: 180px;
+  padding: 4px;
+}
+
+.tb-menu-sep {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--border);
+}
+
+/* ---------------------------------------------------------------------------
+   Tables
+   ---------------------------------------------------------------------------*/
+.page-wrap table {
+  border-collapse: collapse;
+  table-layout: fixed;
+  width: 100%;
+  margin: 10pt 0;
+  overflow: hidden;
+}
+
+.page-wrap table td,
+.page-wrap table th {
+  border: 1px solid var(--border-strong);
+  padding: 5px 8px;
+  vertical-align: top;
+  box-sizing: border-box;
+  position: relative;
+  min-width: 1em;
+}
+
+.page-wrap table th {
+  background: #f1f3f5;
+  font-weight: 700;
+  text-align: left;
+}
+
+.page-wrap table .selectedCell::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(43, 108, 176, 0.16);
+  pointer-events: none;
+}
+
+.page-wrap table .column-resize-handle {
+  position: absolute;
+  right: -2px;
+  top: 0;
+  bottom: -2px;
+  width: 4px;
+  background: var(--accent);
+  cursor: col-resize;
+  pointer-events: none;
+}
+
+.page-wrap .tableWrapper {
+  overflow-x: auto;
+}
+
+.page-wrap table p {
+  margin: 0;
+}
+
+/* ---------------------------------------------------------------------------
+   Images
+   ---------------------------------------------------------------------------*/
+.page-wrap img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 6pt 0;
+  border-radius: 2px;
+}
+
+.page-wrap img.ProseMirror-selectednode {
+  outline: 2px solid var(--accent);
+}
+
+/* ---------------------------------------------------------------------------
+   Find & Replace bar
+   ---------------------------------------------------------------------------*/
+.find-host {
+  flex: 0 0 auto;
+}
+
+.fw-findbar {
+  display: none;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 12px;
+  background: var(--chrome-bg);
+  border-bottom: 1px solid var(--border-strong);
+}
+
+.fw-findbar.open {
+  display: flex;
+}
+
+.fw-find-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.fw-find-input,
+.fw-replace-input {
+  height: 28px;
+  min-width: 200px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: #fff;
+  color: var(--text);
+  padding: 0 8px;
+  font-family: inherit;
+  font-size: 13px;
+}
+
+.fw-find-input:focus,
+.fw-replace-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+.fw-find-count {
+  font-size: 12px;
+  color: var(--text-muted);
+  min-width: 44px;
+  text-align: center;
+}
+
+.fw-find-btn {
+  height: 28px;
+  min-width: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: #fff;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+}
+
+.fw-find-btn:hover {
+  background: var(--hover-bg);
+}
+
+.fw-find-btn.is-active {
+  background: var(--active-bg);
+  border-color: var(--active-border);
+  color: var(--accent);
+}
+
+/* Search match decorations painted by find.js */
+.fw-search-match {
+  background: rgba(255, 213, 0, 0.45);
+  border-radius: 2px;
+}
+
+.fw-search-current {
+  background: #ff9632;
+  color: #1f2329;
+}
+
+/* ---------------------------------------------------------------------------
+   Recovery banner
+   ---------------------------------------------------------------------------*/
+.recovery-banner {
+  display: none;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 14px;
+  background: #fff7e0;
+  border-bottom: 1px solid #e6c84a;
+  color: #6b5300;
+  font-size: 13px;
+  flex: 0 0 auto;
+}
+
+.recovery-banner.show {
+  display: flex;
+}
+
+.rb-text {
+  flex: 1;
+}
+
+.rb-btn {
+  height: 26px;
+  padding: 0 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: #fff;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.rb-recover {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+.rb-btn:hover {
+  filter: brightness(0.97);
+}
+
+/* ---------------------------------------------------------------------------
+   Status-bar zoom control
+   ---------------------------------------------------------------------------*/
+.sb-zoom {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.sb-zoom-btn {
+  width: 22px;
+  height: 20px;
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  background: #fff;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0;
+}
+
+.sb-zoom-btn:hover {
+  background: var(--hover-bg);
+}
+
+.sb-zoom-select {
+  height: 20px;
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  background: #fff;
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.sb-file {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------------------
+   Accessibility: visible focus ring for keyboard users
+   ---------------------------------------------------------------------------*/
+.tb-btn:focus-visible,
+.tb-select:focus-visible,
+.fw-find-btn:focus-visible,
+.sb-zoom-btn:focus-visible,
+.rb-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* ---------------------------------------------------------------------------
+   Dark mode — styles the app chrome but keeps the .page white (like Word)
+   ---------------------------------------------------------------------------*/
+html.dark {
+  --chrome-bg: #2a2d31;
+  --chrome-bg-2: #232629;
+  --canvas-bg: #17191c;
+  --border: #3a3d42;
+  --border-strong: #45494f;
+  --text: #e4e6ea;
+  --text-muted: #a0a4ab;
+  --accent: #5b9be0;
+  --accent-soft: #233247;
+  --active-bg: #2d4763;
+  --active-border: #3f6699;
+  --hover-bg: #34383d;
+  --page-shadow: rgba(0, 0, 0, 0.5);
+}
+
+html.dark body {
+  background: var(--canvas-bg);
+}
+
+html.dark .tb-select,
+html.dark .fw-find-input,
+html.dark .fw-replace-input,
+html.dark .fw-find-btn,
+html.dark .sb-zoom-btn,
+html.dark .sb-zoom-select,
+html.dark .rb-btn {
+  background: #1f2226;
+  color: var(--text);
+}
+
+html.dark .tb-popup,
+html.dark .tb-dropdown-popup,
+html.dark .tb-lh-popup,
+html.dark .tb-color-popup {
+  background: #26292d;
+  color: var(--text);
+}
+
+html.dark .tb-menu-item {
+  color: var(--text);
+}
+
+html.dark .tb-menu-item:hover {
+  background: var(--accent-soft);
+}
+
+html.dark .fw-settings-card {
+  background: #26292d;
+}
+
+html.dark .fw-set-picker,
+html.dark .fw-set-btn {
+  background: #1f2226;
+  color: var(--text);
+}
+
+html.dark .fw-set-done {
+  background: var(--accent);
+  color: #fff;
+}
+
+html.dark .recovery-banner {
+  background: #3a3320;
+  border-color: #6b5a1e;
+  color: #f0dca0;
+}
+
+html.dark .recovery-banner .rb-recover {
+  background: var(--accent);
+  color: #fff;
+}
+
+/* The page itself stays white in dark mode (Word-like). */
+
+/* ---------------------------------------------------------------------------
+   Focus / distraction-free mode
+   Hides the toolbar, find bar, outline panel and status bar, and centers the
+   page on a calm background. A pure class flip on <html>, so it's smooth.
+   ---------------------------------------------------------------------------*/
+html.focus-mode .toolbar,
+html.focus-mode .statusbar,
+html.focus-mode #find-host,
+html.focus-mode .outline-panel {
+  display: none !important;
+}
+
+html.focus-mode .body-row {
+  background: var(--canvas-bg);
+}
+
+html.focus-mode .editor-area {
+  padding-top: 48px;
+  padding-bottom: 96px;
+  background: var(--canvas-bg);
+}
+
+/* A calmer, slightly off-white canvas in focus mode for light theme. */
+html.focus-mode:not(.dark) {
+  --canvas-bg: #e9e8e4;
+}
+
+/* ---------------------------------------------------------------------------
+   Printing
+   Unbound has no print path, no print CSS and no page size. Ctrl/Cmd+P is
+   swallowed in main.js and shows a toast; the browser's default print of a
+   continuously scrolling column is not a supported feature.
+   ---------------------------------------------------------------------------*/
