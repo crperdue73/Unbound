@@ -147,3 +147,55 @@ the supplied artwork as its icon.
 ✅ · stale-brand sweep over `src/ package.json e2e/ test/ out/` → CLEAN ✅ ·
 bridge agrees on both sides (`out/preload` exposes `"unbound"`, renderer calls
 `window.unbound`) ✅
+
+---
+
+## P7 — Ship it: public repo, clean history, installer (2026-10-22)
+
+**1. FreeWrite gone from the git history, not just the working tree.** The
+upstream root commit carried `src/main/formats/pdf.js` and
+`docs/superpowers/specs/2026-06-09-freewrite-design.md`. Deleting them at the tip
+would have left both visible in history — a `pdf.js` blob a tester could check
+out, and a FreeWrite spec describing the pagination model. Replaced the local
+history with a single orphan root commit (`Unbound 1.0.0 …`). Verified: no
+parent, 40 files, zero files matching `freewrite|pdf|print`.
+
+Upstream credit now lives in README "License and lineage" and LICENSE, which is
+what GPL-3.0 actually requires. The code is credited; the paper model is not
+shipped.
+
+**2. Ctrl+P killed at the source.** It was previously unhandled, which meant it
+fell through to Chromium's built-in print dialog — a real print path I had
+missed. `src/renderer/main.js` now binds it, calls `preventDefault()`, and shows
+a toast: "Unbound has no print option — the document has no pages to print."
+Added `e2e/continuous.e2e.mjs` test that counts `window.print()` calls after
+Ctrl+P and asserts zero, plus a menu scan asserting no Print item and no
+`Ctrl+P` accelerator anywhere in the application menu.
+
+**3. CI builds the installer.** `.github/workflows/build.yml` on
+`windows-latest`: install → test → **guard greps for print/PDF code and fails
+the build if it returns** → build → `electron-builder --win` → upload artifact;
+on a `v*` tag, attach to a Release. The guard is the thing that stops this
+regressing silently.
+
+**4. electron-builder config bug.** First CI run failed at packaging:
+`configuration.win should be one of these: null`. Cause: `shortcutName` was set
+under `win`, where electron-builder 26 does not accept it (it belongs under
+`nsis`, where it was already correctly set). Removed the duplicate; set
+`win.artifactName` to `${productName}-Setup-${version}.${ext}`. Verified locally
+with `--dir` before re-running CI.
+
+**Released:** https://github.com/crperdue73/Unbound/releases/tag/v1.0.0
+- `Unbound-Setup-1.0.0.exe` (102 MB, NSIS installer)
+- `Unbound-1.0.0-portable.exe` (102 MB, no install)
+- CI run 39838427217 — all steps green.
+
+**Verified inside the shipped package** (not just the source tree): extracted
+`out/main`, `out/preload`, `out/renderer` from the built `app.asar` on the runner
+output and grepped — no `printToPDF`/`createPdf`/`printHtml`; no `freewrite` or
+`pdf` files; `out/main/chunks/icon-BQvqSyTK.png` present, so the mark ships.
+
+**Still unverified:** the app has never actually been launched. Electron and
+Playwright's Chromium both fail here on missing `libnspr4`/`libnss3`, and
+`xvfb` is absent, so the installer has been built and inspected but not run.
+Robbie is testing it — that is the real gate.
