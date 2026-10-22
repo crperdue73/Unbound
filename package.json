@@ -58,8 +58,7 @@
         "nsis",
         "portable"
       ],
-      "artifactName": "${productName}-${version}-${arch}.${ext}",
-      "shortcutName": "Unbound"
+      "artifactName": "${productName}-Setup-${version}.${ext}"
     },
     "nsis": {
       "oneClick": false,
