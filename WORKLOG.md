@@ -247,3 +247,58 @@ grows a `serialize()`.
 
 Gates: vitest 24/24, `npm run build` green, print/PDF guard CLEAN, read-only
 serializer guard CLEAN. Version 1.0.1 (package.json + lock both bumped).
+
+## 2026-10-22 — v1.0.2: the file on disk stops going stale
+
+Robbie's actual workflow, stated plainly: *"My main use is viewing markdown files
+made by agents."* That single sentence reprioritized the roadmap. The bottleneck
+isn't features, it's that the file keeps changing while it's open. An agent
+appends a log entry, a script regenerates a report, and the copy in the window
+quietly becomes a lie.
+
+**Reload from disk.** The main process polls the open file's `mtime` + `size`
+every 2s. Polling, not `fs.watch`: inotify misses writes that go through
+rename (which is exactly what our own atomic write does), and one `stat` call
+every two seconds costs nothing. `mtime` alone isn't enough either — coarse
+resolution on some filesystems means a fast overwrite can land in the same tick,
+so size rides along.
+
+The policy lives in the renderer, because that's where the dirty flag and the
+user are:
+
+- **clean document → reload silently.** Nothing can be lost, and stale text is
+  actively misleading.
+- **unsaved edits → never reload.** A dismissible bar offers Reload / Keep
+  editing. Auto-reloading here would throw away typing, which is the one thing
+  this app must never do.
+- **deleted/moved → told once**, edits stay in the window, watcher stops so it
+  doesn't nag every two seconds.
+- Every open/save re-arms the watcher at the new path, so switching documents
+  can't leave a stale path firing events at the wrong file.
+
+**`Ctrl+R` reassignment.** The stock Electron `View → Reload` reloads the whole
+window — which discards unsaved edits and restarts the editor for no reason. I
+took the accelerator away from it and gave it to **File → Reload from Disk**;
+the window reload moved to `Ctrl+Shift+R`. This is the third time the same
+category of bug has shown up: a stock Chromium/Electron affordance that does
+something destructive and has a shortcut nobody questions. Print was the first.
+
+**Outline filter.** Agent logs have dozens of headings. The panel now has a
+filter box (live, case-insensitive), ArrowDown to enter the list, Escape to
+clear. It distinguishes "this document has no headings" from "your filter
+matched nothing" — an empty list that looks like a bug is worse than no list.
+
+**Tests: 32** (was 24). The watcher tests use real files and real timing in temp
+dirs rather than mocked `fs`, because the bug this prevents only exists on a
+real filesystem — including a deletion-reported-exactly-once test and a
+re-arm-abandons-old-path test.
+
+Gates: vitest 32/32, `npm run build` green, `out/preload/index.js` confirmed to
+expose `reloadFile` + `onFileChanged`, print/PDF guard CLEAN, read-only
+serializer guard CLEAN. Version 1.0.2.
+
+Still true and still worth saying: **I have never launched this.** No
+`libnspr4`/`libnss3` on this host, so Electron won't start. Everything above is
+build + extract + grep + test, never watching it work. Robbie is the only person
+who has run Unbound, and his verdict on 1.0.1 ("a text editor with extra tools —
+a mule") is better evidence than anything I can generate here.

@@ -22,6 +22,12 @@ let currentPath = null
 // writable format at that path, so the first save is redirected to a .docx.
 let readOnlySource = false
 let isDirty = false
+// Signature of the file as last read or written. Compared against what the main
+// process reports so a reload can never silently swap in a different file.
+let fileSignature = null
+// Set when the file on disk changed while the document had unsaved edits. Drives
+// the banner; we never auto-reload over unsaved work.
+let staleOnDisk = false
 let editor = null
 let toolbarApi = null
 let statusApi = null
@@ -53,7 +59,9 @@ const fw =
     // Added in parallel by the main/preload agent; guarded so this module still
     // builds and runs (drag & drop degrades gracefully) if they are absent.
     getPathForFile: () => '',
-    readImage: async () => ({ canceled: true })
+    readImage: async () => ({ canceled: true }),
+    reloadFile: async () => ({ ok: false, error: 'unavailable' }),
+    onFileChanged: () => () => {}
   }
 
 // --- Title / dirty helpers ---------------------------------------------------
@@ -175,11 +183,100 @@ function maybeShowRecovery() {
   banner.classList.add('show')
 }
 
+
+// --- File changed on disk ----------------------------------------------------
+//
+// Unbound is often open on a file something else is still writing: an agent
+// appending a log, a script regenerating a report. The rule is simple and it is
+// the only one that never costs the user work:
+//
+//   clean document  -> reload silently. Nothing can be lost, and showing stale
+//                      text would be actively misleading.
+//   unsaved edits   -> never reload. Show a banner and let the person decide.
+//                      Auto-reloading here would throw away their typing.
+//
+// The banner is dismissible and the offer stays live, so a user who is mid-
+// thought can acknowledge the change and pull it in later from the same bar.
+
+function ensureStaleBanner(evt) {
+  const banner = document.getElementById('recovery-banner')
+  if (!banner) return
+
+  const msg = document.createElement('span')
+  msg.className = 'rb-msg'
+  msg.textContent =
+    evt.kind === 'deleted'
+      ? 'This file was deleted or moved on disk. Your edits are still here.'
+      : 'This file changed on disk. You have unsaved edits.'
+
+  banner.innerHTML = ''
+  banner.append(msg)
+
+  if (evt.kind !== 'deleted') {
+    const reloadBtn = document.createElement('button')
+    reloadBtn.className = 'rb-btn rb-recover'
+    reloadBtn.textContent = 'Reload'
+    reloadBtn.addEventListener('click', () => {
+      banner.classList.remove('show')
+      doReloadFromDisk({ force: true })
+    })
+    banner.append(reloadBtn)
+  }
+
+  const dismissBtn = document.createElement('button')
+  dismissBtn.className = 'rb-btn rb-discard'
+  dismissBtn.textContent = 'Keep editing'
+  dismissBtn.addEventListener('click', () => {
+    staleOnDisk = false
+    banner.classList.remove('show')
+  })
+  banner.append(dismissBtn)
+
+  banner.classList.add('show')
+}
+
+async function doReloadFromDisk({ force = false } = {}) {
+  if (!currentPath) return
+  // A forced reload (the user clicked Reload) still refuses to trash edits
+  // without a yes. Silent reloads only ever happen on a clean document.
+  if (!force && isDirty) {
+    staleOnDisk = true
+    ensureStaleBanner({ kind: 'changed' })
+    return
+  }
+  if (force && isDirty && !confirmDiscardIfDirty()) return
+
+  let result
+  try {
+    result = await fw.reloadFile(fileSignature)
+  } catch (err) {
+    showToast(`Could not reload: ${String(err)}`)
+    return
+  }
+  if (!result || !result.ok) {
+    showToast(`Could not reload: ${result?.error || 'unknown error'}`)
+    return
+  }
+
+  editor.commands.setContent(result.html || '<p></p>', { emitUpdate: false })
+  fileSignature = result.signature || fileSignature
+  staleOnDisk = false
+  markDirty(false)
+  clearAutosave()
+  const banner = document.getElementById('recovery-banner')
+  if (banner) banner.classList.remove('show')
+  refreshUI()
+  showToast('Reloaded from disk.', 'ok')
+}
+
 // --- File actions ------------------------------------------------------------
-function loadIntoEditor(html, path, { readOnly = false } = {}) {
+function loadIntoEditor(html, path, { readOnly = false, signature = null } = {}) {
   editor.commands.setContent(html || '<p></p>', { emitUpdate: false })
   currentPath = path || null
   readOnlySource = Boolean(readOnly)
+  fileSignature = signature || null
+  staleOnDisk = false
+  if (outlineApi) outlineApi.reset()
   markDirty(false)
   refreshUI()
   editor.commands.focus('end')
@@ -190,6 +287,8 @@ function doNew() {
   editor.commands.setContent('<p></p>', { emitUpdate: false })
   currentPath = null
   readOnlySource = false
+  fileSignature = null
+  staleOnDisk = false
   markDirty(false)
   clearAutosave()
   refreshUI()
@@ -210,7 +309,7 @@ async function doOpen() {
     showToast(`Could not open file: ${result.error}`)
     return
   }
-  loadIntoEditor(result.html, result.path, { readOnly: result.readOnly })
+  loadIntoEditor(result.html, result.path, { readOnly: result.readOnly, signature: result.signature })
   clearAutosave()
 }
 
@@ -233,6 +332,12 @@ async function doSave({ saveAs = false } = {}) {
     return result
   }
   currentPath = result.path || currentPath
+  // The save re-baselines the file. Without this the next on-disk change is
+  // measured against a stale signature and reports a change that never happened.
+  if (result.signature !== undefined) fileSignature = result.signature
+  // An upgrade out of .md/.txt means the document now lives in a .docx, so the
+  // read-only marker has to clear or every subsequent save would re-prompt.
+  if (result.upgradedFrom) readOnlySource = false
   markDirty(false)
   clearAutosave()
   updateTitle()
@@ -314,7 +419,7 @@ async function openDroppedDocument(path) {
     return
   }
   if (r.html != null) {
-    loadIntoEditor(r.html, r.path, { readOnly: r.readOnly })
+    loadIntoEditor(r.html, r.path, { readOnly: r.readOnly, signature: r.signature })
     clearAutosave()
   }
 }
@@ -567,6 +672,18 @@ function boot() {
   if (focusApi) toolbarApi.setFocusActive(focusApi.isActive())
 
   // Route application-menu actions.
+  // Watch the open document for on-disk changes. The main process polls; this is
+  // the policy half — see the comment block above doReloadFromDisk.
+  fw.onFileChanged((evt) => {
+    if (!evt || !evt.path || evt.path !== currentPath) return
+    if (isDirty) {
+      staleOnDisk = true
+      ensureStaleBanner(evt)
+      return
+    }
+    doReloadFromDisk()
+  })
+
   fw.onMenu((action) => {
     switch (action) {
       case 'new':
@@ -580,6 +697,9 @@ function boot() {
         break
       case 'save-as':
         doSaveAs()
+        break
+      case 'reload':
+        doReloadFromDisk({ force: true })
         break
       default:
         break
@@ -603,7 +723,7 @@ function boot() {
       return
     }
     if (r && r.html != null) {
-      loadIntoEditor(r.html, r.path, { readOnly: r.readOnly })
+      loadIntoEditor(r.html, r.path, { readOnly: r.readOnly, signature: r.signature })
       clearAutosave()
     } else if (r && r.error) {
       showToast(r.error)

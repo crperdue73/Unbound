@@ -80,7 +80,26 @@ const api = {
 
   // Read an image at a known path into a data URL.
   // -> { canceled?, dataUrl?, error? }
-  readImage: (path) => ipcRenderer.invoke('file:read-image', path)
+  readImage: (path) => ipcRenderer.invoke('file:read-image', path),
+
+  // --- File changed on disk ----------------------------------------------
+  // Re-read the open document. `signature` is what the file looked like when
+  // this window last synced; the main process compares it to what it has seen
+  // so a reload cannot silently load something unexpected.
+  // -> { ok, path?, html?, format?, readOnly?, signature?, error?, missing? }
+  reloadFile: (signature) => ipcRenderer.invoke('file:reload', signature),
+
+  // Subscribe to on-disk change notifications for the open document.
+  // Events: { path, kind: 'changed'|'deleted', size? }
+  // Returns an unsubscribe function. Removing the listener before adding a new
+  // one keeps repeated mount/remount from stacking handlers.
+  onFileChanged: (handler) => {
+    if (typeof handler !== 'function') return () => {}
+    const wrapped = (_event, evt) => handler(evt)
+    ipcRenderer.removeAllListeners('file:changed')
+    ipcRenderer.on('file:changed', wrapped)
+    return () => ipcRenderer.removeListener('file:changed', wrapped)
+  }
 }
 
 contextBridge.exposeInMainWorld('unbound', api)

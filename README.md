@@ -18,11 +18,11 @@ Installers are built by CI on each platform's own runner and attached to the
 
 | Platform | File | Notes |
 | --- | --- | --- |
-| Windows | `Unbound-Setup-1.0.1.exe` | Installer, or the `-portable.exe` to run without installing |
-| Debian / Ubuntu | `Unbound-1.0.1-amd64.deb` | `sudo apt install ./Unbound-1.0.1-amd64.deb` |
-| Any Linux | `Unbound-1.0.1-x86_64.AppImage` | `chmod +x` and run. Needs `libfuse2` on newer distros |
-| macOS (Apple Silicon) | `Unbound-1.0.1-arm64.dmg` | See the first-launch note below |
-| macOS (Intel) | `Unbound-1.0.1-x64.dmg` | See the first-launch note below |
+| Windows | `Unbound-Setup-1.0.2.exe` | Installer, or the `-portable.exe` to run without installing |
+| Debian / Ubuntu | `Unbound-1.0.2-amd64.deb` | `sudo apt install ./Unbound-1.0.2-amd64.deb` |
+| Any Linux | `Unbound-1.0.2-x86_64.AppImage` | `chmod +x` and run. Needs `libfuse2` on newer distros |
+| macOS (Apple Silicon) | `Unbound-1.0.2-arm64.dmg` | See the first-launch note below |
+| macOS (Intel) | `Unbound-1.0.2-x64.dmg` | See the first-launch note below |
 
 **None of these builds are code-signed.** Signing is a paid certificate on both
 Windows and macOS, and Unbound doesn't have one yet.
@@ -86,6 +86,23 @@ Plus **find & replace**, a **document outline** for jumping around long pieces,
 with word and character counts.
 
 A whole document, and nothing that says "page 4 of 31."
+
+## Watching the file on disk
+
+Unbound notices when the open document changes underneath it, because a lot of
+what you open was written by something else — an agent appending a log, a script
+regenerating a report.
+
+- **No unsaved edits:** the document reloads silently. Showing you stale text
+  would be worse than reloading.
+- **Unsaved edits:** nothing is ever reloaded over your work. A bar offers
+  **Reload** or **Keep editing**, and it stays put until you choose.
+- **File deleted or moved:** you're told once, and your edits stay in the window.
+- **File → Reload from Disk** (`Ctrl+R`) reloads on demand.
+
+`Ctrl+R` reloads the *document*, not the window — there's no risk of an app
+refresh throwing away something you typed. If you want the window itself
+restarted, that's `Ctrl+Shift+R`.
 
 ## Formats: one written, three read
 

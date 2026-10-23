@@ -10,6 +10,7 @@ import path from 'node:path'
 import { byExtension, isWritable, defaultExtension } from './formats/index.js'
 import { showOpen, showSave } from './dialogs.js'
 import { addRecent, removeRecent } from './recent.js'
+import { watchFile, unwatchFile } from './filewatch.js'
 
 // ---------------------------------------------------------------------------
 // Atomic write: write to a temp file in the same directory, then rename over
@@ -61,6 +62,22 @@ function windowFor(event) {
 //   onDirtyChanged(win, dirty) -> let the close guard track dirty state.
 let hooks = { onRecentChanged: null, onDirtyChanged: null, onConfirmClose: null }
 
+// The document currently open in the window. `signature` is what the file looked
+// like when we last read or wrote it, so a reload can tell the user whether the
+// thing they are about to load is actually newer than what they have.
+let openDoc = { path: null, signature: null }
+
+// Which window the watcher should notify. Set on every import so the callback
+// has somewhere to send file:changed.
+let watcherWin = null
+
+function signatureOf(filePath) {
+  return fs
+    .stat(filePath)
+    .then((s) => ({ mtimeMs: s.mtimeMs, size: s.size }))
+    .catch(() => null)
+}
+
 // Image file extensions the picker accepts, plus their MIME types.
 const IMAGE_EXTS = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp']
 const IMAGE_MIME = {
@@ -111,15 +128,41 @@ async function importPath(filePath) {
     const html = await module.deserialize(data)
     addRecent(filePath)
     notifyRecentChanged()
+
+    openDoc = { path: filePath, signature: await signatureOf(filePath) }
+    armWatcher(filePath)
     // `readOnly` tells the renderer this document cannot be saved back in place.
-    // It drives the window title and the first-save behaviour.
-    return { path: filePath, html, format: module.name, readOnly: isWritable(module) ? false : true }
+    // `signature` is the baseline the renderer compares against when the file
+    // changes on disk, so a reload cannot load a different file than expected.
+    return {
+      path: filePath,
+      html,
+      format: module.name,
+      readOnly: !isWritable(module),
+      signature: openDoc.signature
+    }
   } catch (err) {
     // Missing/corrupt file: drop from recent so the submenu self-heals.
     removeRecent(filePath)
     notifyRecentChanged()
     return { error: String(err) }
   }
+}
+
+// Point the watcher at the current document and route its events to `win`.
+// Re-arming on every open is what makes switching documents safe: the previous
+// file stops being watched, so a stale path can never fire.
+function armWatcher(filePath) {
+  const win = watcherWin
+  if (!win || win.isDestroyed?.()) return
+  watchFile(filePath, (evt) => {
+    if (!win || win.isDestroyed?.()) return
+    try {
+      win.webContents.send('file:changed', evt)
+    } catch {
+      /* window went away mid-flight */
+    }
+  })
 }
 
 export function registerIpc(opts = {}) {
@@ -132,6 +175,7 @@ export function registerIpc(opts = {}) {
   // --- Open flow ---------------------------------------------------------
   ipcMain.handle('file:open', async (event) => {
     const win = windowFor(event)
+    watcherWin = win ?? watcherWin
     try {
       const res = await showOpen(win)
       if (res.canceled || !res.filePaths || res.filePaths.length === 0) {
@@ -148,11 +192,12 @@ export function registerIpc(opts = {}) {
   })
 
   // --- Open a specific path (recent files / programmatic) ----------------
-  ipcMain.handle('file:open-path', async (_event, filePath) => {
+  ipcMain.handle('file:open-path', async (event, filePath) => {
     try {
       if (!filePath || typeof filePath !== 'string') {
         return { error: 'No file path provided' }
       }
+      watcherWin = windowFor(event) ?? watcherWin
       return await importPath(filePath)
     } catch (err) {
       return { error: String(err) }
@@ -201,6 +246,7 @@ export function registerIpc(opts = {}) {
   // --- Save flow ---------------------------------------------------------
   ipcMain.handle('file:save', async (event, payload) => {
     const win = windowFor(event)
+    if (win) watcherWin = win
     const { html, currentPath = null, saveAs = false } = payload ?? {}
 
     try {
@@ -253,16 +299,66 @@ export function registerIpc(opts = {}) {
       addRecent(targetPath)
       notifyRecentChanged()
 
+      // The save just made the file match the window, so re-baseline and move
+      // the watcher: a document upgraded from .md to .docx now lives at a new
+      // path, and the old one must stop being watched.
+      openDoc = { path: targetPath, signature: await signatureOf(targetPath) }
+      armWatcher(targetPath)
+
       // 5. Success. `upgradedFrom` lets the renderer tell the user the source
       // file was left alone, so "where did my .md go?" has an immediate answer.
       return {
         canceled: false,
         path: targetPath,
         format: module.name,
-        upgradedFrom
+        upgradedFrom,
+        signature: openDoc.signature
       }
     } catch (err) {
       return { canceled: false, error: String(err) }
+    }
+  })
+
+  // --- Reload the open document from disk --------------------------------
+  //
+  // A file being written by something else (an agent appending a log, a script
+  // regenerating a report) goes stale in the window. This re-reads it.
+  //
+  // The caller passes its own signature — what the file looked like when the
+  // renderer last synced. If that differs from ours, the document changed
+  // underneath us and the caller is reloading something other than what it
+  // thinks; we say so rather than pretending the reload was clean.
+  ipcMain.handle('file:reload', async (_event, requested) => {
+    try {
+      if (!openDoc.path) return { ok: false, error: 'No file is open' }
+
+      const current = await signatureOf(openDoc.path)
+      if (!current) {
+        return { ok: false, error: 'The file is no longer there', missing: true }
+      }
+
+      if (requested && openDoc.signature && requested.mtimeMs !== openDoc.signature.mtimeMs) {
+        // Not fatal — the caller may be reloading precisely to catch up. Just
+        // report that the baseline moved so the UI can word it honestly.
+      }
+
+      const module = byExtension(extOf(openDoc.path))
+      if (!module) return { ok: false, error: 'Unsupported file type' }
+
+      const data = await fs.readFile(openDoc.path)
+      const html = await module.deserialize(data)
+
+      openDoc.signature = current
+      return {
+        ok: true,
+        path: openDoc.path,
+        html,
+        format: module.name,
+        readOnly: !isWritable(module),
+        signature: current
+      }
+    } catch (err) {
+      return { ok: false, error: String(err) }
     }
   })
 

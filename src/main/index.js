@@ -141,6 +141,14 @@ function buildMenu() {
           click: () => sendMenu('save-as')
         },
         { type: 'separator' },
+        {
+          // Files get rewritten underneath the window (agents append logs,
+          // scripts regenerate reports). Reload is how you catch up without
+          // closing and reopening the document.
+          label: 'Reload from Disk',
+          click: () => sendMenu('reload')
+        },
+        { type: 'separator' },
         isMac ? { role: 'close' } : { role: 'quit' }
       ]
     },
@@ -159,7 +167,15 @@ function buildMenu() {
     {
       label: 'View',
       submenu: [
-        { role: 'reload' },
+        // Replaced from the stock { role: 'reload' }: reloading the window throws
+        // away unsaved edits and restarts the editor for no reason. Ctrl+R is
+        // bound to File > Reload from Disk instead, which is what people
+        // actually mean when the document changed underneath them.
+        {
+          label: 'Reload Document from Disk',
+          accelerator: 'CmdOrCtrl+R',
+          click: () => sendMenu('reload')
+        },
         { role: 'toggleDevTools' },
         { type: 'separator' },
         { role: 'resetZoom' },

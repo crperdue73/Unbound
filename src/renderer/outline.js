@@ -40,7 +40,36 @@ export function mountOutline(host, editor, scrollContainer) {
   empty.className = 'outline-empty'
   empty.textContent = 'No headings yet. Use Heading 1–3 to build an outline.'
 
-  host.append(header, list, empty)
+  // Filter box. Long agent logs have dozens of headings, most of them numbered
+  // sections you don't care about right now — scrolling a 200-item list to find
+  // one is slower than typing three letters.
+  const filter = document.createElement('input')
+  filter.type = 'search'
+  filter.className = 'outline-filter'
+  filter.placeholder = 'Filter headings…'
+  filter.setAttribute('aria-label', 'Filter headings')
+  filter.addEventListener('input', () => rebuild())
+
+  // Keyboard nav: the panel is a list you move through, not a form to tab out of.
+  filter.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      const first = list.querySelector('.outline-item')
+      if (first) first.focus()
+    } else if (e.key === 'Escape') {
+      filter.value = ''
+      rebuild()
+      editor.commands.focus()
+    }
+  })
+
+  // Clicking anywhere on the panel shouldn't steal the selection from the doc.
+  host.addEventListener('mousedown', (e) => {
+    if (e.target === filter) return
+    if (e.target.closest('.outline-item')) e.preventDefault()
+  })
+
+  host.append(header, filter, list, empty)
 
   // Collect headings from the ProseMirror doc with their document positions.
   function collect() {
@@ -66,9 +95,20 @@ export function mountOutline(host, editor, scrollContainer) {
   }
 
   function rebuild() {
-    const headings = collect()
+    const all = collect()
+    const q = filter.value.trim().toLowerCase()
+    const headings = q ? all.filter((h) => h.text.toLowerCase().includes(q)) : all
     list.innerHTML = ''
+
+    if (!all.length) {
+      empty.textContent = 'No headings yet. Use Heading 1–3 to build an outline.'
+      empty.classList.add('show')
+      return
+    }
     if (!headings.length) {
+      // Distinguish "this document has no headings" from "your filter matches
+      // nothing" — otherwise an empty list looks like a bug.
+      empty.textContent = `No headings match “${filter.value.trim()}”.`
       empty.classList.add('show')
       return
     }
@@ -119,7 +159,14 @@ export function mountOutline(host, editor, scrollContainer) {
   }
   setVisible(persisted)
 
-  return { rebuild, rebuildDebounced, toggle, setVisible, isVisible }
+  function reset() {
+    // Called when a different document is loaded: a filter left over from the
+    // previous file would hide headings for no visible reason.
+    filter.value = ''
+    rebuild()
+  }
+
+  return { rebuild, rebuildDebounced, toggle, setVisible, isVisible, reset }
 }
 
 export default mountOutline
