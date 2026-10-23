@@ -1,30 +1,32 @@
 // Tests for Unbound's format layer.
 //
-// Unbound ships exactly ONE document format: Word (.docx).
+// Unbound WRITES exactly one format: Word (.docx). It READS three: .docx,
+// Markdown (.md/.markdown) and plain text (.txt).
 //
-// These tests target only the documented format-module interface
-// (src/main/formats/docx.js + index.js):
+// The asymmetry is the whole design, so most of these tests are about it:
+// .md and .txt have no page model (safe to read) and no way to hold formatting
+// (unsafe to write back), so an opened .md/.txt saves as .docx and the source
+// file is never touched.
 //
-//   Each format module exports:
-//     name: string
-//     extensions: string[]              (lowercase, no dot)
-//     async serialize(html, ctx): Promise<Buffer|string>
-//     async deserialize(data: Buffer): Promise<string>
+// Documented module interface (src/main/formats/*.js):
+//   name: string
+//   extensions: string[]              (lowercase, no dot)
+//   async deserialize(data): Promise<string>
+//   async serialize(html)?            (only on writable formats)
+//   readOnly?: true                   (on formats with no serialize)
 //
-//   index.js exports:
-//     formats            // array of all modules
-//     byExtension(ext)   // -> module | undefined  (ext lowercase, no dot)
-//     saveFilters()      // -> [{name, extensions}]
-//     openFilters()      // -> [{name, extensions}]
+// index.js exports: formats, writable, defaultExtension, byExtension,
+// isWritable, saveFilters, openFilters.
 //
-// There is no PDF module: PDF is a paginated format, and Unbound never
-// paginates. There is no Markdown/HTML/TXT module either — docx is the only
-// format the app reads or writes.
+// There is no PDF module and never will be: PDF is a paginated format, and
+// Unbound never paginates.
 
 import { describe, it, expect } from 'vitest';
 
 import * as registry from '../src/main/formats/index.js';
 import * as docx from '../src/main/formats/docx.js';
+import * as markdown from '../src/main/formats/markdown.js';
+import * as text from '../src/main/formats/text.js';
 
 // --------------------------------------------------------------------------
 // Word: round-trip preserves structural formatting
@@ -65,54 +67,154 @@ describe('docx format', () => {
 });
 
 // --------------------------------------------------------------------------
-// Registry: byExtension / saveFilters / openFilters
+// Markdown: reads to HTML, never writes
+// --------------------------------------------------------------------------
+describe('markdown format', () => {
+  it('converts headings, emphasis and lists', async () => {
+    const html = await markdown.deserialize(
+      Buffer.from('# Title\n\nSome **bold** and *italic* text.\n\n- one\n- two\n')
+    );
+    expect(html).toMatch(/<h1[^>]*>Title<\/h1>/i);
+    expect(html).toMatch(/<strong>bold<\/strong>/i);
+    expect(html).toMatch(/<em>italic<\/em>/i);
+    expect(html).toMatch(/<li[^>]*>one<\/li>/i);
+  });
+
+  it('renders GFM tables as real tables, not a paragraph of pipes', async () => {
+    const html = await markdown.deserialize(
+      Buffer.from('| a | b |\n| - | - |\n| 1 | 2 |\n')
+    );
+    expect(html).toMatch(/<table/i);
+    expect(html).toMatch(/<td[^>]*>1<\/td>/i);
+  });
+
+  it('strips a UTF-8 BOM instead of rendering it', async () => {
+    const html = await markdown.deserialize(Buffer.from('\uFEFF# Title\n'));
+    expect(html).not.toContain('\uFEFF');
+    expect(html).toMatch(/<h1[^>]*>Title<\/h1>/i);
+  });
+
+  it('has no serialize — Markdown cannot hold what the editor adds', () => {
+    expect(markdown.readOnly).toBe(true);
+    expect(markdown.serialize).toBeUndefined();
+  });
+
+  it('handles .markdown as well as .md', () => {
+    expect(markdown.extensions).toEqual(['md', 'markdown']);
+  });
+});
+
+// --------------------------------------------------------------------------
+// Plain text: reads to paragraphs, never writes
+// --------------------------------------------------------------------------
+describe('text format', () => {
+  it('turns a blank line into a paragraph break', async () => {
+    const html = await text.deserialize(Buffer.from('first para\n\nsecond para\n'));
+    expect(html).toBe('<p>first para</p>\n<p>second para</p>');
+  });
+
+  it('keeps single newlines as <br>, not as paragraph breaks', async () => {
+    const html = await text.deserialize(Buffer.from('line one\nline two\n'));
+    expect(html).toBe('<p>line one<br>line two</p>');
+  });
+
+  it('handles CRLF (Windows) and lone CR (classic Mac)', async () => {
+    expect(await text.deserialize(Buffer.from('a\r\n\r\nb'))).toBe('<p>a</p>\n<p>b</p>');
+    expect(await text.deserialize(Buffer.from('a\r\rb'))).toBe('<p>a</p>\n<p>b</p>');
+  });
+
+  it('escapes angle brackets instead of letting them become markup', async () => {
+    const html = await text.deserialize(Buffer.from('if (a < b && c > d) { }'));
+    expect(html).not.toMatch(/<b/);
+    expect(html).toContain('&lt;');
+    expect(html).toContain('&amp;');
+  });
+
+  it('preserves leading indentation', async () => {
+    const html = await text.deserialize(Buffer.from('    indented code\n'));
+    expect(html).toContain('<p>    indented code</p>');
+  });
+
+  it('returns an empty paragraph for an empty or whitespace-only file', async () => {
+    expect(await text.deserialize(Buffer.from(''))).toBe('<p></p>');
+    expect(await text.deserialize(Buffer.from('   \n\n  '))).toBe('<p></p>');
+  });
+
+  it('has no serialize — plain text cannot hold formatting', () => {
+    expect(text.readOnly).toBe(true);
+    expect(text.serialize).toBeUndefined();
+  });
+});
+
+// --------------------------------------------------------------------------
+// Registry: one writable format, three readable ones
 // --------------------------------------------------------------------------
 describe('format registry', () => {
-  it('contains exactly one format: Word', () => {
-    expect(Array.isArray(registry.formats)).toBe(true);
-    expect(registry.formats.length).toBe(1);
-    expect(registry.formats.map((m) => m.name)).toEqual(['Word Document']);
+  it('reads exactly docx, markdown and text', () => {
+    expect(registry.formats.map((m) => m.name)).toEqual([
+      'Word Document',
+      'Markdown',
+      'Text File'
+    ]);
   });
 
-  it('byExtension("docx") resolves to the Word Document module', () => {
-    const m = registry.byExtension('docx');
-    expect(m).toBeDefined();
-    expect(m.name).toBe('Word Document');
-    expect(m.extensions).toContain('docx');
+  it('writes only Word', () => {
+    expect(registry.writable).toHaveLength(1);
+    expect(registry.writable[0].name).toBe('Word Document');
+    expect(registry.defaultExtension).toBe('docx');
   });
 
-  it('byExtension tolerates a leading dot and uppercase input', () => {
-    expect(registry.byExtension('.docx')?.name).toBe('Word Document');
-    expect(registry.byExtension('DOCX')?.name).toBe('Word Document');
+  it('byExtension resolves every readable format, case and dot insensitive', () => {
+    expect(registry.byExtension('docx')?.name).toBe('Word Document');
+    expect(registry.byExtension('.DOCX')?.name).toBe('Word Document');
+    expect(registry.byExtension('md')?.name).toBe('Markdown');
+    expect(registry.byExtension('.Markdown')?.name).toBe('Markdown');
+    expect(registry.byExtension('txt')?.name).toBe('Text File');
+    expect(registry.byExtension('TXT')?.name).toBe('Text File');
   });
 
-  it('byExtension returns undefined for anything that is not docx', () => {
-    for (const ext of ['xyz', 'pdf', 'md', 'markdown', 'html', 'htm', 'txt', '']) {
+  it('byExtension rejects PDF, HTML and nonsense', () => {
+    for (const ext of ['pdf', 'html', 'htm', 'rtf', 'odt', 'xyz', '']) {
       expect(registry.byExtension(ext)).toBeUndefined();
     }
     expect(registry.byExtension(undefined)).toBeUndefined();
     expect(registry.byExtension(null)).toBeUndefined();
   });
 
+  it('isWritable is true only for Word', () => {
+    expect(registry.isWritable(registry.byExtension('docx'))).toBe(true);
+    expect(registry.isWritable(registry.byExtension('md'))).toBe(false);
+    expect(registry.isWritable(registry.byExtension('txt'))).toBe(false);
+    expect(registry.isWritable(undefined)).toBe(false);
+  });
+
   it('saveFilters() offers docx and nothing else', () => {
     const filters = registry.saveFilters();
     expect(filters).toHaveLength(1);
-    expect(filters[0].name).toBe('Word Document');
     expect(filters[0].extensions).toEqual(['docx']);
   });
 
-  it('openFilters() offers docx and nothing else', () => {
+  it('openFilters() offers docx, markdown, text and a combined entry', () => {
     const filters = registry.openFilters();
-    expect(filters).toHaveLength(1);
-    expect(filters[0].name).toBe('Word Document');
-    expect(filters[0].extensions).toEqual(['docx']);
+    const names = filters.map((f) => f.name);
+    expect(names).toContain('Word Document');
+    expect(names).toContain('Markdown');
+    expect(names).toContain('Text File');
+    const all = filters[filters.length - 1];
+    expect(all.extensions).toEqual(['docx', 'md', 'markdown', 'txt']);
   });
 
-  it('no filter anywhere offers a paginated or plain-text extension', () => {
-    const everyExt = [...registry.saveFilters(), ...registry.openFilters()]
-      .flatMap((f) => f.extensions);
-    for (const ext of ['pdf', 'md', 'html', 'txt']) {
-      expect(everyExt).not.toContain(ext);
-    }
+  it('no filter anywhere offers a paginated extension', () => {
+    const everyExt = [...registry.saveFilters(), ...registry.openFilters()].flatMap(
+      (f) => f.extensions
+    );
+    expect(everyExt).not.toContain('pdf');
+  });
+
+  it('no save filter offers a format that cannot hold formatting', () => {
+    const saveExts = registry.saveFilters().flatMap((f) => f.extensions);
+    expect(saveExts).not.toContain('md');
+    expect(saveExts).not.toContain('markdown');
+    expect(saveExts).not.toContain('txt');
   });
 });

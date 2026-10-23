@@ -199,3 +199,51 @@ output and grepped — no `printToPDF`/`createPdf`/`printHtml`; no `freewrite` o
 Playwright's Chromium both fail here on missing `libnspr4`/`libnss3`, and
 `xvfb` is absent, so the installer has been built and inspected but not run.
 Robbie is testing it — that is the real gate.
+
+## 2026-10-22 — v1.0.1: Markdown and plain text are back (read-only)
+
+Robbie used the app and changed his mind: he wants `.md` and `.txt` to open. His
+reasoning is sound and worth recording — those formats have no page model either,
+so letting them in costs the product nothing. They become a way to upgrade old
+plain-text files into a real document with formatting and images, which is
+exactly what Unbound is for.
+
+**The problem I had to design around:** `.md` and `.txt` cannot hold formatting.
+A naive "add the formats back" would mean: open `notes.md`, add a heading and a
+photo, hit Ctrl+S, and watch every one of those additions vanish — the file
+round-trips to something strictly worse than what's on screen. That is the same
+category of silent destruction as a page break appearing where you didn't ask.
+
+**So the formats are READ-ONLY:**
+- `src/main/formats/text.js` — `.txt` → paragraphs. Blank line = paragraph break,
+  single newline = `<br>`, indentation preserved, CRLF/lone-CR normalized, BOM
+  stripped, HTML-escaped per line. No `serialize`.
+- `src/main/formats/markdown.js` — `.md`/`.markdown` → HTML via `marked` with GFM
+  on (tables must render as tables). No `serialize`. `turndown` was NOT brought
+  back; the write direction doesn't exist anymore.
+- Registry split into `formats` (readable) vs `writable`, plus `isWritable()` and
+  `defaultExtension`. `saveFilters()` still offers docx only.
+- `ipc.js` save path: if the target resolves to a read-only module, the save is
+  **redirected to a `.docx` beside the source** and `upgradedFrom` is returned.
+  The source file is never written. `v1.2-notes.md` → `v1.2-notes.docx` (only the
+  final extension is replaced).
+- Renderer: `readOnlySource` flag forces the save dialog on first save so the user
+  sees the new name, and a toast says the original file was left unchanged.
+  Drag & drop accepts `md`/`markdown`/`txt`.
+
+**Bug caught by the tests, not by me:** my first `.txt` parser appended a `<br>`
+to the last paragraph of every file that ended in a newline — i.e. nearly all of
+them. Three tests failed. Fixed by dropping trailing newlines before splitting.
+
+**Verified against real files** (not just unit assertions): built `.md` and `.txt`
+fixtures in a temp dir, ran deserialize → serialize → deserialize through the
+docx path. Every word survived both, the Markdown table survived, and both source
+files were byte-identical afterwards. Files on disk: `notes.docx, notes.md,
+v1.2-notes.docx, v1.2-notes.txt`.
+
+**CI guard narrowed, not weakened:** the guard that forbade print/PDF symbols is
+unchanged, and a new clause fails the build if `markdown.js` or `text.js` ever
+grows a `serialize()`.
+
+Gates: vitest 24/24, `npm run build` green, print/PDF guard CLEAN, read-only
+serializer guard CLEAN. Version 1.0.1 (package.json + lock both bumped).

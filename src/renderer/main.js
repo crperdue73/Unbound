@@ -18,6 +18,9 @@ import './styles.css'
 
 // --- Module-level state ------------------------------------------------------
 let currentPath = null
+// True when the open document came from a read-only format (.md/.txt). It has no
+// writable format at that path, so the first save is redirected to a .docx.
+let readOnlySource = false
 let isDirty = false
 let editor = null
 let toolbarApi = null
@@ -173,9 +176,10 @@ function maybeShowRecovery() {
 }
 
 // --- File actions ------------------------------------------------------------
-function loadIntoEditor(html, path) {
+function loadIntoEditor(html, path, { readOnly = false } = {}) {
   editor.commands.setContent(html || '<p></p>', { emitUpdate: false })
   currentPath = path || null
+  readOnlySource = Boolean(readOnly)
   markDirty(false)
   refreshUI()
   editor.commands.focus('end')
@@ -185,6 +189,7 @@ function doNew() {
   if (!confirmDiscardIfDirty()) return
   editor.commands.setContent('<p></p>', { emitUpdate: false })
   currentPath = null
+  readOnlySource = false
   markDirty(false)
   clearAutosave()
   refreshUI()
@@ -205,14 +210,19 @@ async function doOpen() {
     showToast(`Could not open file: ${result.error}`)
     return
   }
-  loadIntoEditor(result.html, result.path)
+  loadIntoEditor(result.html, result.path, { readOnly: result.readOnly })
   clearAutosave()
 }
 
 async function doSave({ saveAs = false } = {}) {
   let result
   try {
-    result = await fw.saveFile(editor.getHTML(), { currentPath, saveAs })
+    result = await fw.saveFile(editor.getHTML(), {
+      currentPath,
+      // A read-only source (.md/.txt) has no writable target, so the first save
+      // must go through the dialog and let the user see the new name.
+      saveAs: saveAs || readOnlySource
+    })
   } catch (err) {
     showToast(`Save failed: ${String(err)}`)
     return { error: String(err) }
@@ -226,6 +236,16 @@ async function doSave({ saveAs = false } = {}) {
   markDirty(false)
   clearAutosave()
   updateTitle()
+  // A document opened from .md or .txt cannot be written back in its own
+  // format without losing everything added to it, so the save was redirected to
+  // a .docx. Say so plainly — otherwise the user watches Ctrl+S and cannot
+  // tell where the file went.
+  if (result.upgradedFrom) {
+    showToast(
+      `Saved as Word (.docx). Your original .${result.upgradedFrom} file was left unchanged.`,
+      'ok'
+    )
+  }
   // Return the save result so the close-then-save flow can detect success.
   return result
 }
@@ -268,7 +288,9 @@ function doUnlink() {
 }
 
 // --- Drag & drop -------------------------------------------------------------
-const DOC_EXTS = ['docx']
+// Anything Unbound can open. Markdown and plain text are read-only: dropping
+// one opens it, but it will save as .docx (see src/main/formats/index.js).
+const DOC_EXTS = ['docx', 'md', 'markdown', 'txt']
 const IMG_EXTS = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp']
 
 function extOf(name) {
@@ -292,7 +314,7 @@ async function openDroppedDocument(path) {
     return
   }
   if (r.html != null) {
-    loadIntoEditor(r.html, r.path)
+    loadIntoEditor(r.html, r.path, { readOnly: r.readOnly })
     clearAutosave()
   }
 }
@@ -581,7 +603,7 @@ function boot() {
       return
     }
     if (r && r.html != null) {
-      loadIntoEditor(r.html, r.path)
+      loadIntoEditor(r.html, r.path, { readOnly: r.readOnly })
       clearAutosave()
     } else if (r && r.error) {
       showToast(r.error)

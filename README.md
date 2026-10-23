@@ -18,11 +18,11 @@ Installers are built by CI on each platform's own runner and attached to the
 
 | Platform | File | Notes |
 | --- | --- | --- |
-| Windows | `Unbound-Setup-1.0.0.exe` | Installer, or the `-portable.exe` to run without installing |
-| Debian / Ubuntu | `Unbound-1.0.0-amd64.deb` | `sudo apt install ./Unbound-1.0.0-amd64.deb` |
-| Any Linux | `Unbound-1.0.0-x86_64.AppImage` | `chmod +x` and run. Needs `libfuse2` on newer distros |
-| macOS (Apple Silicon) | `Unbound-1.0.0-arm64.dmg` | See the first-launch note below |
-| macOS (Intel) | `Unbound-1.0.0-x64.dmg` | See the first-launch note below |
+| Windows | `Unbound-Setup-1.0.1.exe` | Installer, or the `-portable.exe` to run without installing |
+| Debian / Ubuntu | `Unbound-1.0.1-amd64.deb` | `sudo apt install ./Unbound-1.0.1-amd64.deb` |
+| Any Linux | `Unbound-1.0.1-x86_64.AppImage` | `chmod +x` and run. Needs `libfuse2` on newer distros |
+| macOS (Apple Silicon) | `Unbound-1.0.1-arm64.dmg` | See the first-launch note below |
+| macOS (Intel) | `Unbound-1.0.1-x64.dmg` | See the first-launch note below |
 
 **None of these builds are code-signed.** Signing is a paid certificate on both
 Windows and macOS, and Unbound doesn't have one yet.
@@ -87,18 +87,26 @@ with word and character counts.
 
 A whole document, and nothing that says "page 4 of 31."
 
-## One format: Word
+## Formats: one written, three read
 
-Unbound opens and saves `.docx`. That is the whole list.
+Unbound **saves** `.docx`. That is the whole list.
 
 Word documents are what people actually send each other, and a real document
 format is what a word processor is for. The other exports most editors ship —
-Markdown, HTML, plain text — are markup and plain-text surfaces, and a plain-text
-round-trip throws away the formatting the app exists to produce. One format,
-done properly, beats four done halfway.
+Markdown, HTML, plain text — cannot hold the formatting this app exists to
+produce, so a save to one of them is a save that quietly deletes your work.
 
-There is no PDF export. PDF is a paginated format; shipping it would let pages
-back in through the back door.
+Unbound **opens** `.docx`, Markdown (`.md`, `.markdown`) and plain text (`.txt`).
+
+Markdown and plain text are read-only, and that asymmetry is deliberate. Neither
+format has a page model, so reading them costs this product nothing. Neither can
+hold a heading's weight, a table, an image, or a font — so writing back to them
+would destroy everything you added. Open a `.md`, add a heading and a picture, hit
+save: you get `notes.docx` next to `notes.md`, and **`notes.md` is left exactly as
+it was**. Unbound will not overwrite your source file with a downgraded copy.
+
+There is no PDF. PDF is a paginated format; shipping it would let pages back in
+through the back door.
 
 Saves are atomic (temp file + rename), so a failed write never corrupts an
 existing document. Autosave and crash recovery keep the last good state.
@@ -109,6 +117,7 @@ existing document. Autosave and crash recovery keep the last good state.
 - **[TipTap](https://tiptap.dev/)** — the rich-text editor (built on ProseMirror)
 - **[electron-vite](https://electron-vite.org/)** + **[Vite](https://vite.dev/)** — build tooling
 - **[Vitest](https://vitest.dev/)** — unit tests, **[Playwright](https://playwright.dev/)** — end-to-end
+- Markdown reading: **[marked](https://marked.js.org/)**
 - Word conversion: **[@turbodocx/html-to-docx](https://www.npmjs.com/package/@turbodocx/html-to-docx)** (write) & **[mammoth](https://www.npmjs.com/package/mammoth)** (read)
 
 ## Build & Run

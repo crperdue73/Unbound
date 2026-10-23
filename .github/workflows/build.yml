@@ -42,6 +42,10 @@ jobs:
         run: |
           set -e
           hits=$(grep -rniE "printToPDF|printHtml|app:print|createPdf|wrapForPrint|PRINT_CSS|doPrint|formats/pdf|@media[[:space:]]+print" src/ e2e/ test/ || true)
+          # Read-only formats must never gain a writer. A serialize() on .md or .txt
+          # would let a save silently destroy formatting; the redirect to docx is
+          # the whole reason they are allowed in.
+          hits="$hits$(grep -rnE "export (async )?function serialize" src/main/formats/markdown.js src/main/formats/text.js || true)"
           if [ -n "$hits" ]; then
             echo "::error::Print/PDF code found — Unbound must have neither."
             echo "$hits"
@@ -98,6 +102,10 @@ jobs:
         run: |
           set -e
           hits=$(grep -rniE "printToPDF|printHtml|app:print|createPdf|wrapForPrint|PRINT_CSS|doPrint|formats/pdf|@media[[:space:]]+print" src/ e2e/ test/ || true)
+          # Read-only formats must never gain a writer. A serialize() on .md or .txt
+          # would let a save silently destroy formatting; the redirect to docx is
+          # the whole reason they are allowed in.
+          hits="$hits$(grep -rnE "export (async )?function serialize" src/main/formats/markdown.js src/main/formats/text.js || true)"
           if [ -n "$hits" ]; then
             echo "::error::Print/PDF code found — Unbound must have neither."
             echo "$hits"
@@ -157,6 +165,10 @@ jobs:
         run: |
           set -e
           hits=$(grep -rniE "printToPDF|printHtml|app:print|createPdf|wrapForPrint|PRINT_CSS|doPrint|formats/pdf|@media[[:space:]]+print" src/ e2e/ test/ || true)
+          # Read-only formats must never gain a writer. A serialize() on .md or .txt
+          # would let a save silently destroy formatting; the redirect to docx is
+          # the whole reason they are allowed in.
+          hits="$hits$(grep -rnE "export (async )?function serialize" src/main/formats/markdown.js src/main/formats/text.js || true)"
           if [ -n "$hits" ]; then
             echo "::error::Print/PDF code found — Unbound must have neither."
             echo "$hits"

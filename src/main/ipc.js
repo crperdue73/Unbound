@@ -7,7 +7,7 @@
 import { ipcMain, BrowserWindow, dialog, app } from 'electron'
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import { byExtension } from './formats/index.js'
+import { byExtension, isWritable, defaultExtension } from './formats/index.js'
 import { showOpen, showSave } from './dialogs.js'
 import { addRecent, removeRecent } from './recent.js'
 
@@ -111,7 +111,9 @@ async function importPath(filePath) {
     const html = await module.deserialize(data)
     addRecent(filePath)
     notifyRecentChanged()
-    return { path: filePath, html, format: module.name }
+    // `readOnly` tells the renderer this document cannot be saved back in place.
+    // It drives the window title and the first-save behaviour.
+    return { path: filePath, html, format: module.name, readOnly: isWritable(module) ? false : true }
   } catch (err) {
     // Missing/corrupt file: drop from recent so the submenu self-heals.
     removeRecent(filePath)
@@ -212,15 +214,38 @@ export function registerIpc(opts = {}) {
         targetPath = res.filePath
       }
 
-      // 2. Derive extension; default to docx when unknown.
+      // 2. Resolve the format for the target path.
+      //
+      // A document opened from .md or .txt has no writable format at that path.
+      // Saving in place would silently destroy every heading, table, image and
+      // font the user added — the exact failure this app refuses to perform. So
+      // the save is redirected to a .docx beside the source file. The source is
+      // never written and never overwritten.
       let module = byExtension(extOf(targetPath))
+      let upgradedFrom = null
+
+      if (module && !isWritable(module)) {
+        upgradedFrom = module.extensions[0]
+        module = byExtension(defaultExtension)
+        // Same folder, same name, new extension: "notes.md" -> "notes.docx".
+        // Replacing only the final extension means "v1.2-notes.md" keeps its dot.
+        targetPath = targetPath.replace(/\.[^./\\]+$/, '') + `.${defaultExtension}`
+      }
+
+      // No usable extension at all: append the default rather than guessing.
       if (!module) {
-        module = byExtension('docx')
-        // Append the default extension if the chosen path has no usable one.
-        if (!extOf(targetPath)) targetPath = `${targetPath}.docx`
+        module = byExtension(defaultExtension)
+        if (!extOf(targetPath)) targetPath = `${targetPath}.${defaultExtension}`
       }
 
       // 3. Serialize + atomic write.
+      //
+      // Guard, not a formality: if a module without `serialize` ever reaches
+      // here, calling it throws inside the try and the user gets an error
+      // instead of a silently emptied file.
+      if (!isWritable(module)) {
+        return { canceled: false, error: 'This file type cannot be saved' }
+      }
       const data = await module.serialize(html)
       await atomicWrite(targetPath, data)
 
@@ -228,8 +253,14 @@ export function registerIpc(opts = {}) {
       addRecent(targetPath)
       notifyRecentChanged()
 
-      // 5. Success.
-      return { canceled: false, path: targetPath, format: module.name }
+      // 5. Success. `upgradedFrom` lets the renderer tell the user the source
+      // file was left alone, so "where did my .md go?" has an immediate answer.
+      return {
+        canceled: false,
+        path: targetPath,
+        format: module.name,
+        upgradedFrom
+      }
     } catch (err) {
       return { canceled: false, error: String(err) }
     }
