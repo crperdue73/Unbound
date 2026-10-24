@@ -417,3 +417,31 @@ product does:
   (was 41 — +10 from this file)
 
 Runs on all three CI jobs via `npm test`.
+
+## 2026-10-24 — 1.0.3 shipped to GitHub, verified against the real installer
+
+Robbie supplied a token; repo description, copy fixes and a build all landed.
+Release: **v1.0.3**, all three runners green, 7 assets.
+
+**Verified on the actual downloaded .deb** (not just the tree):
+- `usr/share/applications/unbound.desktop` → `Comment=` now reads "…Saves as Word
+  (.docx); opens .docx, Markdown and plain text."; `Keywords=` carries `markdown;txt;`;
+  `MimeType=` carries all three. The 1.0.2 lie is gone from the shipped package.
+- `resources/app.asar` (37.8 MB): zero hits for `FreeWrite`, `freewrite`, `printToPDF`,
+  `printHtml`, `app:print`, `createPdf`, `doPrint`, `PRINT_CSS`, `@media print`,
+  `formats/pdf`. One hit for "no print option" — the toast.
+- `Package: unbound-editor`, `Version: 1.0.3`, `Exec=/opt/Unbound/unbound-editor %U`
+  matching the real binary name. No clash with Debian's `unbound` DNS resolver.
+- 14 unresolved .so at runtime here, all from this host having no GTK/NSS — the box's
+  gap, not the package's. Did not launch; no display, and Dad tests it himself.
+
+**I broke CI once and fixed it.** The version bump used
+`sed 's/"version": "1.0.2"/"version": "1.0.3"/g' package-lock.json` — unanchored, so it
+rewrote 12 transitive dep pins (`balanced-match`, `wrappy`, `util-deprecate`,
+`@oozcitak/util` under `@oozcitak/url`, …). `npm ci` refused on all three runners
+(EUSAGE) and no installer was produced. Restored the lock from the previous commit,
+bumped only `version` and `packages[""].version`, confirmed with `npm ci --dry-run`
+(exit 0), pushed, re-pointed the tag. Second build: windows/linux/macos all success.
+
+Lesson: a version bump touches exactly two lines of a lockfile. `npm version` does
+this correctly; hand-editing with an unanchored regex does not.
