@@ -6,6 +6,7 @@
 
 import { app, BrowserWindow, Menu, dialog, session, nativeImage } from 'electron'
 import { fileURLToPath } from 'node:url'
+import { existsSync, statSync } from 'node:fs'
 import path from 'node:path'
 import { registerIpc } from './ipc.js'
 import { getRecent, clearRecent } from './recent.js'
@@ -31,6 +32,12 @@ const DEFAULT_BOUNDS = { width: 1100, height: 800 }
 
 let mainWindow = null
 
+// A path handed to us before the window exists (a double-clicked .docx in the
+// file manager, an `unbound-editor notes.docx` from a shell, a macOS open-file
+// event). Held until a window is ready to receive it, then cleared. See
+// takePendingOpen() below — it is the single place the handoff happens.
+let pendingOpen = null
+
 // Debounce timer for persisting window state on resize/move.
 let saveStateTimer = null
 
@@ -50,6 +57,62 @@ function sendMenu(action) {
   if (win && !win.isDestroyed()) {
     win.webContents.send('menu:action', action)
   }
+}
+
+// normalizeOpenPath returns the document path named on the command line, or
+// null. It has to cope with two different argument shapes:
+//   - packaged Linux:   ['/opt/unbound-editor/unbound-editor', 'notes.docx']
+//   - dev on Linux:     ['.../electron', '.', 'notes.docx']
+//   - electron-builder adds a bare '.' as the app dir in dev, so a '.' or the
+//     app path itself is never a document.
+// Only arguments naming a real, existing file are accepted — a stray flag or a
+// relative path that does not resolve is dropped rather than guessed at, in the
+// same spirit as the collector dropping a write record with no target.
+function normalizeOpenPath(argv) {
+  if (!Array.isArray(argv)) return null
+  for (const arg of argv.slice(1)) {
+    if (!arg || arg === '.' || arg.startsWith('-')) continue
+    let candidate = arg
+    // A file manager may pass a file:// URL instead of a bare path.
+    if (candidate.startsWith('file://')) {
+      try {
+        candidate = fileURLToPath(candidate)
+      } catch {
+        continue
+      }
+    }
+    try {
+      if (existsSync(candidate) && statSync(candidate).isFile()) return candidate
+    } catch {
+      /* unreadable — not a document we can open */
+    }
+  }
+  return null
+}
+
+// queueOpen records a path to open once a renderer is listening. Called before
+// the window exists (argv, macOS open-file) and while it exists (second-instance).
+function queueOpen(filePath) {
+  if (!filePath) return
+  pendingOpen = filePath
+  deliverPendingOpen()
+}
+
+// deliverPendingOpen hands the pending path to the window, if there is one that
+// has finished loading. It is deliberately idempotent: a path is only cleared
+// once it has actually been sent, so an event that arrives before the renderer
+// is ready is not silently dropped — which is the failure mode this exists to
+// prevent (a double-click that opens a blank window).
+function deliverPendingOpen() {
+  if (!pendingOpen) return
+  if (!mainWindow || mainWindow.isDestroyed()) return
+  if (mainWindow.webContents.isLoading()) return
+  const filePath = pendingOpen
+  pendingOpen = null
+  // Reuse the exact channel File → Open Recent uses, so the renderer path that
+  // loads a document (with its dirty-guard and read-only handling) is the same
+  // one a menu click takes. No second open pipeline to drift.
+  sendToRenderer('menu:open-recent', filePath)
 }
 
 function sendToRenderer(channel, payload) {
@@ -246,6 +309,12 @@ function createWindow() {
     mainWindow.show()
   })
 
+  // Deliver a document that was waiting for us (double-clicked, or named on the
+  // command line) as soon as the renderer can receive it. did-finish-load, not
+  // ready-to-show: the renderer's subscription is established in its own script,
+  // and a message sent before that would be lost with no trace.
+  mainWindow.webContents.on('did-finish-load', () => deliverPendingOpen())
+
   // --- Persist window state ----------------------------------------------
   // Save immediately on close, and debounced on resize/move so dragging or
   // resizing doesn't hammer the disk.
@@ -356,7 +425,35 @@ function createWindow() {
 // App lifecycle.
 // ---------------------------------------------------------------------------
 
+// --- Single instance + external open requests ------------------------------
+// Two Unbounds must not run at once: a second double-click has to reach the
+// window that already exists, not start a second editor over the same file.
+// Taking the lock is what makes second-instance possible, so it runs before
+// whenReady. The lock is released by app.quit().
+const gotLock = app.requestSingleInstanceLock()
+if (!gotLock) {
+  // Another instance owns the file. It receives our argv via second-instance.
+  app.quit()
+} else {
+  app.on('second-instance', (_event, argv) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      if (mainWindow.isMinimized()) mainWindow.restore()
+      mainWindow.focus()
+    }
+    queueOpen(normalizeOpenPath(argv))
+  })
+
+  // macOS: the OS delivers Finder/`open` requests as an event, not argv.
+  app.on('open-file', (event, filePath) => {
+    event.preventDefault()
+    queueOpen(filePath)
+  })
+}
+
 app.whenReady().then(() => {
+  // A document named on the command line, queued before the window existed.
+  queueOpen(normalizeOpenPath(process.argv))
+
   // Spellcheck: best-effort, skip if unavailable on this platform/build.
   try {
     session.defaultSession.setSpellCheckerLanguages(['en-US'])

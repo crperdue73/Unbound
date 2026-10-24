@@ -1,7 +1,7 @@
 {
-  "name": "unbound",
-  "version": "1.0.2",
-  "description": "A word processor that never breaks into pages",
+  "name": "unbound-editor",
+  "version": "1.0.3",
+  "description": "A word processor that never breaks into pages. Saves as Word (.docx); opens .docx, Markdown and plain text.",
   "license": "GPL-3.0-only",
   "author": "Robbie Perdue",
   "main": "out/main/index.js",
@@ -10,6 +10,7 @@
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "test": "vitest run",
+    "test:pkgname": "node scripts/check-pkgname.mjs",
     "test:e2e": "playwright test",
     "dist": "electron-vite build && electron-builder --win",
     "dist:dir": "electron-vite build && electron-builder --win --dir",
@@ -82,16 +83,16 @@
       ],
       "category": "Office",
       "synopsis": "A word processor that never breaks into pages",
-      "description": "Unbound is a word processor with no pages: no print option, no PDF, no page breaks. One continuous column that scrolls as far as you need. Word (.docx) is the only format.",
-      "maintainer": "Robbie Perdue <crperdue73@users.noreply.github.com>",
-      "executableName": "unbound",
-      "artifactName": "${productName}-${version}-${arch}.${ext}",
+      "description": "Unbound is a word processor with no pages: no print option, no PDF, no page breaks. One continuous column that scrolls as far as you need. Saves as Word (.docx); opens .docx, Markdown and plain text.",
+      "maintainer": "CTEC DragonForge Team <crperdue@gmail.com>",
+      "executableName": "unbound-editor",
       "desktop": {
         "entry": {
           "Name": "Unbound",
-          "Comment": "A word processor that never breaks into pages",
+          "Comment": "A word processor that never breaks into pages. Saves .docx; opens .docx, Markdown and text.",
           "Categories": "Office;WordProcessor;",
-          "Keywords": "writing;word processor;editor;docx;"
+          "Keywords": "writing;word processor;editor;docx;markdown;txt;",
+          "MimeType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document;text/markdown;text/plain;"
         }
       }
     },

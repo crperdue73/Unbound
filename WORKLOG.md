@@ -302,3 +302,118 @@ Still true and still worth saying: **I have never launched this.** No
 build + extract + grep + test, never watching it work. Robbie is the only person
 who has run Unbound, and his verdict on 1.0.1 ("a text editor with extra tools —
 a mule") is better evidence than anything I can generate here.
+
+---
+
+## 2026-10-23 — Repackaged for DragonForge Linux: `unbound-editor`
+
+Dad wants Unbound in the **DragonForge Linux** apt repo (CTEC's distro, Debian
+trixie, `repo.dragonforgelinux.org`). Ships **by itself for now** — not in `desktop`,
+not in `flex`; he may fold it into `desktop` later.
+
+### The blocker
+`Package: unbound` was already taken. **Debian's `unbound` is the NLnet Labs DNS
+resolver** (`1.26.1-0+deb13u1` here). Our .deb shipping under that name would
+conflict with, shadow, or quietly hijack it on every lab box — and the postinst was
+calling `update-alternatives --install /usr/bin/unbound`, the resolver's own binary.
+Renamed everything a machine reads to **`unbound-editor`**; display name stays
+**Unbound**.
+
+### Measured before deciding (real v1.0.2 .deb)
+103 MB download, **353 MB installed** (`Installed-Size: 353316`) — bundled Chromium
+under `/opt/Unbound/`, bigger than the entire `dragonforge-flex-packages` list. That
+number is why this is an opt-in package and not a metapackage dependency.
+
+### Changed
+- `package.json`: `name` and `build.linux.executableName` → `unbound-editor`;
+  maintainer → `CTEC DragonForge Team <crperdue@gmail.com>`; desktop entry gains
+  `MimeType` for docx/markdown/plain text; new `test:pkgname` script.
+- `src/main/index.js`: `normalizeOpenPath()` (argv scan, skips dev's bare `.`, handles
+  `file://`), `queueOpen`/`deliverPendingOpen` (delivered on **`did-finish-load`**,
+  because the renderer subscribes in its own script and an early message vanishes
+  silently), `requestSingleInstanceLock()` + `second-instance`, `app.on('open-file')`.
+  Reuses the existing `menu:open-recent` channel — no second open pipeline, so the
+  dirty-guard and read-only handling come for free.
+- `scripts/check-pkgname.mjs` (new): 6 checks, exits 1 naming file+key.
+  Negative-tested by reverting the name in a copy — it failed on both name and
+  executableName, which is the point.
+- `test/pkgname.test.js` (new): 9 tests encoding the same rules without Electron.
+- `.github/workflows/build.yml`: `Guard — package name is not \`unbound\`` in the
+  Linux job only.
+
+### Verification
+`npx vitest run` → **41/41, 3 files** (was 32). `check-pkgname` → PASS 6/6.
+Negative test → correctly red. ESM parse clean. Workflow YAML parses.
+
+### NOT done — do not claim
+- **No new `.deb` exists.** electron-builder needs `libnspr4`/`libnss3`; same missing
+  toolchain story. Source renamed, artifact not rebuilt.
+- **Still never launched.** The file-association code is unit-tested against source
+  text, not observed working. A double-click is unverified.
+- Not pushed.
+
+### Next
+Bump version (identity changed → **1.1.0**, not a silent 1.0.2 re-release), rebuild
+with `scripts/build-linux.sh`, confirm `dpkg-deb -f` says `unbound-editor`, verify the
+desktop entry inside the new deb, then a real double-click on a real DE. Repo path:
+`pool/main/u/unbound-editor/`, signed with the DragonForge key — **which I don't
+have.** Dad's call: metapackage or plain package.
+
+## 2026-10-24 — packaging copy fix (1.0.2 deb was wrong)
+
+Robbie caught it installing 1.0.2: the `Comment=` in `/usr/share/applications/unbound.desktop`
+still said **"Word (.docx) is the only format."** That line was built from
+`build.linux.description` in `package.json`, not from any string in `src/` — which is why the
+code and README already said "writes .docx, reads .docx/.md/.txt" and the deb still lied.
+
+Fixed in `package.json`:
+- `build.linux.description` → "Saves as Word (.docx); opens .docx, Markdown and plain text."
+- `build.linux.desktop.entry.Comment` → "A word processor that never breaks into pages. Saves .docx; opens .docx, Markdown and text." (was the short, format-free synopsis — now carries the format truth in the menu/tooltip too)
+- `desktop.entry.Keywords` → added `markdown;txt;` (MimeType was already right: docx + text/markdown + text/plain)
+- `package.json` parses clean (JSON_OK).
+
+⚠️ **Not rebuilt.** No `.deb` on this box (no libnspr4/libnss3) — same toolchain gap as before.
+Next Linux build picks it up; version stays 1.0.2 until then, so a rebuilt deb needs a bump
+(1.0.3) to avoid two different 1.0.2s in the wild.
+
+### Follow-up (same day): repo description + README headline
+
+Robbie caught the same lie in the GitHub repo description:
+*A word processor that never breaks into pages. ... Word (.docx) only.*
+
+- `package.json` top-level `description` (feeds npm/repo metadata consumers) →
+  "…Saves as Word (.docx); opens .docx, Markdown and plain text."
+- `README.md` Formats section: "That is the whole list" → "That is the whole list of what it **writes**" (the sentence read as an app-wide format claim).
+- `README.md` Features → File line now names the three readable formats.
+- README already carried a "Download 1.0.2" table — unchanged; it's about artifacts not formats.
+
+⚠️ **Still needs Robbie (I will not guess a credential):**
+1. GitHub repo **description** field — API-only, no `gh` CLI on this box and no token here. Exact replacement ready:
+   `A word processor that never breaks into pages. No print option, no PDF, no page breaks — one continuous column that scrolls as far as you need it. Saves .docx; opens .docx, Markdown and text.`
+2. Git **push** for the `package.json` / README / `.desktop` copy fixes — this tree has no push credential (same three open gates as Watchman).
+
+### Guard added: `test/copy.test.js` (10 tests) — the claim drift can't happen silently again
+
+The registry (`src/main/formats/index.js`) is now the single source of truth. The test
+derives what the copy is *allowed* to claim and fails when prose promises less than the
+product does:
+
+- **No "Word only" claims** anywhere in `package.json` description / `build.linux.description` /
+  `desktop.entry.Comment` / `README.md` — 5 patterns incl. the literal `Word (.docx) is the
+  only format` and `Word (.docx) only`.
+- **Menu entry + long description must NAME** the readable formats (Markdown, text) — so a
+  vague synopsis can't masquerade as correct.
+- **MIME types must cover every readable format** (docx + text/markdown + text/plain).
+- **No save target outside `writable`** — scans README save-verbs, strips markdown emphasis
+  first. Only real instruction shapes count (`saves .docx`, `saved as .docx`,
+  `Save As (.docx)`); a bare "saves" in prose is not evidence of a promise.
+- **Guards the guard:** asserts the registry really has >1 readable format, so if that ever
+  becomes false the exclusivity rule fails loudly instead of passing vacuously.
+
+**Negative-tested against the actual shipped strings** (not invented ones):
+- restored the real 1.0.2 `.desktop`/deb description string → **2 tests fail**
+- restored the real GitHub repo-description string → **1 test fails**
+- both restored clean (diff-verified), `package.json` parses, **full suite 51/51 green**
+  (was 41 — +10 from this file)
+
+Runs on all three CI jobs via `npm test`.

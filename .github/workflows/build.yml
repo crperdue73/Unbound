@@ -35,6 +35,11 @@ jobs:
       - name: Test
         run: npm test
 
+      # `unbound` is the Debian DNS resolver. A .deb shipping under that name
+      # would conflict with it on every DragonForge lab box.
+      - name: Guard — package name is not `unbound`
+        run: node scripts/check-pkgname.mjs
+
       # Fail the build if any print or PDF path is reintroduced. Matches code
       # symbols that would indicate a real feature, not prose in the README.
       - name: Guard — no print, no PDF

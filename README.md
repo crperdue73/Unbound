@@ -79,7 +79,7 @@ A full formatting toolbar, all wired to a live rich-text editor:
 - **Alignment** — Left, Center, Right, Justify
 - **Spacing** — Line-spacing dropdown, Indent and Outdent
 - **Insert** — Tables, images, links, date
-- **File** — New, Open, Save, Save As (`.docx`)
+- **File** — New, Open, Save, Save As (`.docx`); opens `.docx`, `.md` and `.txt`
 
 Plus **find & replace**, a **document outline** for jumping around long pieces,
 **focus mode** for when the toolbar becomes noise, **zoom**, and a live status bar
@@ -106,7 +106,7 @@ restarted, that's `Ctrl+Shift+R`.
 
 ## Formats: one written, three read
 
-Unbound **saves** `.docx`. That is the whole list.
+Unbound **saves** `.docx`. That is the whole list of what it writes.
 
 Word documents are what people actually send each other, and a real document
 format is what a word processor is for. The other exports most editors ship —
